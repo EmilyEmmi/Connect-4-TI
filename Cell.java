@@ -29,6 +29,14 @@ public class Cell {
     }
     
     /**
+     * Creates a cell with the same state as the specified cell.
+     * @param other the other cell
+     */
+    public Cell(Cell other) {
+        this.state = other.state;
+    }
+    
+    /**
      * Checks if the cell is available (empty).
      * @return true if the cell is empty, false otherwise
      */

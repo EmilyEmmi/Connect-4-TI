@@ -14,6 +14,8 @@ public class GameModel {
     private boolean redWins;
     private boolean yellowWins;
     private Cell.State currentPlayer;  // CHANGED: from boolean redsTurn to Cell.State
+    private Bot redBot; // added for AI
+    private Bot yellowBot; // added for AI
     
     private static final int COLUMNS = 7;
     private static final int ROWS = 6;
@@ -36,6 +38,8 @@ public class GameModel {
         currentPlayer = Cell.State.RED;  // CHANGED: from redsTurn = true
         moves = new Stack<>();
         errorMessage = null;
+        redBot = null;
+        yellowBot = new Bot(); // replace with NULL to disable bot
     }
     
     /**
@@ -86,9 +90,34 @@ public class GameModel {
         if (!gameOver) {
             currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
             // CHANGED: from redsTurn = !redsTurn
+            
+            // Try a bot move. Note that this calls makeMove, making this recursive.
+            checkBotMove();
         }
         
         return true;
+    }
+    
+    /**
+     * Checks if the current player is a bot, and if they are, makes their move.
+     * TODO: undo support, make red bot move first if active
+     */
+    public boolean checkBotMove() {
+    	Bot bot = null;
+    	if (currentPlayer == Cell.State.RED) {
+    		bot = redBot;
+    	} else if (currentPlayer == Cell.State.YELLOW) {
+    		bot = yellowBot;
+    	}
+    	
+    	if (bot != null) {
+    		int column = bot.getMove(currentPlayer, this);
+    		while (!makeMove(column)) {
+    			column = bot.getMove(currentPlayer, this);
+    		}
+    		return true;
+    	}
+    	return false;
     }
     
     /**
@@ -108,15 +137,15 @@ public class GameModel {
         Point lastMove = moves.pop();
         board[lastMove.x][lastMove.y].clear();  // CHANGED: from pieces[x][y] = null
         
-        // Switch back to the previous player
-        currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
-        // CHANGED: from redsTurn = !redsTurn
-        
         // Reset game over flags if necessary
         if (gameOver) {
             gameOver = false;
             redWins = false;
             yellowWins = false;
+        } else {
+            // Switch back to the previous player
+            currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
+            // CHANGED: from redsTurn = !redsTurn
         }
         
         return true;
