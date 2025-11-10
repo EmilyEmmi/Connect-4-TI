@@ -1,4 +1,5 @@
 import java.awt.Point;
+import java.util.Scanner;
 import java.util.Stack;
 
 /**
@@ -121,6 +122,24 @@ public class GameModel {
     }
     
     /**
+     * Writes the board and various game state variables to a file
+     * @param name the name of the file you will create
+     * @return true if successful, false otherwise
+     */
+    public boolean save() {
+    	
+    	return false;
+    }
+    /**
+     * loads game state from a named file
+     * @param name the name of the file you will load
+     * @return true if successful, false otherwise
+     */
+    public boolean load() {
+    	return false;
+    }
+    
+    /**
      * Undoes the last move.
      * MODIFIED: Updated to work with Cell objects
      * @return true if undo was successful, false otherwise
@@ -180,12 +199,12 @@ public class GameModel {
         yellowWins = false;
         
         // Check for red win
-        if (fourInARow(Cell.State.RED)) {  // CHANGED: from fourInARow(true)
+        if (fourInARow(Cell.State.RED) || fourCorners(Cell.State.RED)) {  // CHANGED: from fourInARow(true), added fourCorners()
             gameOver = true;
             redWins = true;
         }
         // Check for yellow win
-        else if (fourInARow(Cell.State.YELLOW)) {  // CHANGED: from fourInARow(false)
+        else if (fourInARow(Cell.State.YELLOW) || fourCorners(Cell.State.YELLOW)) {  // CHANGED: from fourInARow(false), added fourCorners()
             gameOver = true;
             yellowWins = true;
         }
@@ -201,13 +220,38 @@ public class GameModel {
             gameOver = isTie;
         }
     }
-    
+    /**
+     * Checks if there is a square made of a particular color. As in there are
+     * four corners not including in-between coins or the center.
+     * These can be any size that allows gaps, so at least 3x3.
+     * @param playerState which player to check for
+     * @return true if a square is found using the current coin, false otherwise.
+     */
+    private boolean fourCorners(Cell.State playerState) {
+    	for (int col = 0; col < COLUMNS; col++) {
+            for (int row = 0; row < ROWS; row++) {
+                if (board[col][row].isAvailable()) {
+                    break;  // No piece above empty cells
+                } else if (board[col][row].getState() == playerState) {
+                    for (int i = 0; i < ROWS - row; i ++) { // if a coin is found with your state it will loop right until finding another
+                    	if (board[col][row + i].getState() == playerState && i > 1 && i <= col
+                    		&& board[col - i][row + i].getState() == playerState
+                    		&& board[col - i][row].getState() == playerState) { // a series of further checks, looking for square
+                    		return true;
+                    	}
+                    }
+                }
+            }
+        }
+    	return false;
+    }
     /**
      * Checks if there are four pieces of the specified color in a row.
      * MODIFIED: Updated to work with Cell.State instead of boolean
      * @param playerState the player's state to check for
      * @return true if four in a row exists, false otherwise
      */
+    
     private boolean fourInARow(Cell.State playerState) {  // CHANGED: from boolean color
         // Check vertical
         for (int col = 0; col < COLUMNS; col++) {

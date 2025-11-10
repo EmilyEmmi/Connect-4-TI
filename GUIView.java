@@ -1,6 +1,8 @@
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
+import java.util.Scanner;
+
 import javax.swing.*;
 
 /**
@@ -55,6 +57,17 @@ public class GUIView extends JFrame implements GameView {
         // Create control panel with only Undo and Restart buttons
         JPanel controlPanel = new JPanel();
         
+        JButton saveButton = new JButton("Save");
+        saveButton.addActionListener(e -> {
+            model.save();
+            updateView();
+            
+        });
+        JButton loadButton = new JButton("Load");
+        loadButton.addActionListener(e -> {
+            model.load();
+            updateView();
+        });
         JButton undoButton = new JButton("Undo");
         undoButton.addActionListener(e -> {
             model.undo();
@@ -66,7 +79,8 @@ public class GUIView extends JFrame implements GameView {
             model.restart();
             updateView();
         });
-        
+        controlPanel.add(saveButton);
+        controlPanel.add(loadButton);
         controlPanel.add(undoButton);
         controlPanel.add(restartButton);
         
