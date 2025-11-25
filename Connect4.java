@@ -13,6 +13,8 @@ public class Connect4 {
         
         // Determine which view to use
         GameView view;
+
+        // model.updateValues(GameModel.Difficulty.INTERMEDIATE); // TESTING
         
         // NEW: If command-line argument provided, use it
         if (args.length > 0 && args[0].equalsIgnoreCase("text")) {

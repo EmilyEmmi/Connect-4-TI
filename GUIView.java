@@ -17,13 +17,13 @@ public class GUIView extends JFrame implements GameView {
     // Board dimensions (from original BoardDrawing constants)
     private static final int BOARD_START_X = 182;
     private static final int BOARD_START_Y = 75;
-    private static final int BOARD_WIDTH = 386;
-    private static final int BOARD_HEIGHT = 340;
-    private static final int HOLE_DIAMETER = 36;
-    private static final int HOLE_DISTANCE = 50;
-    private static final int HOLE_OFFSET = 25;
-    private static final int HOLE_START_X = BOARD_START_X + HOLE_OFFSET;
-    private static final int HOLE_START_Y = BOARD_START_Y + BOARD_HEIGHT - HOLE_OFFSET - HOLE_DIAMETER;
+    private static int BOARD_WIDTH = 386;
+    private static int BOARD_HEIGHT = 340;
+    private static int HOLE_DIAMETER = 36;
+    private static int HOLE_DISTANCE = 50;
+    private static int HOLE_OFFSET = 25;
+    private static int HOLE_START_X = BOARD_START_X + HOLE_OFFSET;
+    private static int HOLE_START_Y = BOARD_START_Y + BOARD_HEIGHT - HOLE_OFFSET - HOLE_DIAMETER;
     
     /**
      * Creates a new GUI view for the game.
@@ -39,9 +39,25 @@ public class GUIView extends JFrame implements GameView {
      * MODIFIED: Removed button panel, added click handling
      */
     private void setupFrame() {
+    	// NEW: half hole size if the size is large
+    	if (model.getRows() > 15) {
+    		HOLE_DIAMETER = HOLE_DIAMETER / 2;
+    		HOLE_DISTANCE = HOLE_DISTANCE / 2;
+    		HOLE_OFFSET = HOLE_OFFSET / 2;
+    	}
+    	
+    	// NEW: Recalculate board size for different difficulties
+    	// Default should be 386, 340
+    	BOARD_WIDTH = HOLE_DISTANCE * (model.getColumns() - 1) + 2 * HOLE_OFFSET + HOLE_DIAMETER;
+    	BOARD_HEIGHT = HOLE_DISTANCE * (model.getRows() - 1) + 2 * HOLE_OFFSET + HOLE_DIAMETER + 4;
+    	HOLE_START_X = BOARD_START_X + HOLE_OFFSET;
+        HOLE_START_Y = BOARD_START_Y + BOARD_HEIGHT - HOLE_OFFSET - HOLE_DIAMETER;
+    	
         setTitle("CONNECT 4");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(750, 550);
+        // NEW: Scale window based on board size
+        // Default should be 750, 550
+        setSize(BOARD_START_X * 2 + BOARD_WIDTH, BOARD_START_Y * 2 + BOARD_HEIGHT + 60);
         
         // Create the board panel
         boardPanel = new BoardPanel();
@@ -57,6 +73,7 @@ public class GUIView extends JFrame implements GameView {
         // Create control panel with only Undo and Restart buttons
         JPanel controlPanel = new JPanel();
         
+        // NEW: Save and load buttons
         JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
             model.save();
@@ -68,6 +85,7 @@ public class GUIView extends JFrame implements GameView {
             model.load();
             updateView();
         });
+        
         JButton undoButton = new JButton("Undo");
         undoButton.addActionListener(e -> {
             model.undo();

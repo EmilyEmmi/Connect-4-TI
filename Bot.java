@@ -53,8 +53,6 @@ public class Bot {
 			return winLocation + 1;
 		}
 
-		Cell[][] board = model.getBoard();
-
 		for (int col = 0; col < model.getColumns(); col++) {
 			// Can't make a move if the specified column is full
 			if (!model.getCell(col, model.getRows() - 1).isAvailable()) {
