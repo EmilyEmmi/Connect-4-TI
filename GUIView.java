@@ -56,6 +56,7 @@ public class GUIView extends JFrame implements GameView {
         ButtonGroup difficultyButtonGroup = new ButtonGroup();
         
         JRadioButton humanButton = new JRadioButton("Human");
+        humanButton.setBackground(Color.cyan);
         humanButton.setSelected(true);
         humanButton.addActionListener(e -> {
             model.updateValues(GameModel.Difficulty.HUMAN);
@@ -80,7 +81,7 @@ public class GUIView extends JFrame implements GameView {
         difficultyButtonGroup.add(intermediateButton);
         
         JRadioButton expertButton = new JRadioButton("Expert");
-        expertButton.setBackground(Color.red);
+        expertButton.setBackground(new Color(255, 100, 100));
         expertButton.addActionListener(e -> {
             model.updateValues(GameModel.Difficulty.EXPERT);
         });
@@ -93,7 +94,7 @@ public class GUIView extends JFrame implements GameView {
         ButtonGroup colorButtonGroup = new ButtonGroup();
         
         JRadioButton redButton = new JRadioButton("Red");
-        redButton.setBackground(Color.red);
+        redButton.setBackground(new Color(255, 100, 100));
         redButton.setSelected(true);
         redButton.addActionListener(e -> {
             model.updateBotColor(Cell.State.YELLOW);
