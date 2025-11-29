@@ -81,8 +81,7 @@ public class Bot {
 		}
 
 		// pick random valid move
-		double random = Math.random();
-		return validMoves.get((int) (random * validMoves.size())) + 1;
+		return validMoves.get((int) (Math.random() * validMoves.size())) + 1;
 	}
 
 	/**
@@ -111,8 +110,42 @@ public class Bot {
 		}
 
 		Cell c = model.getCell(col, row);
+		Cell.State prevState = c.getState();
 		c.setState(player);
 		int value = getPieceValueHere(col, row, player, model);
+
+		// if checking first move, and depth is not 0, consider an extra move if we took a lucky coin
+		// we only check top depth since we can't predict where the next lucky coin will be
+		if (depth == maxDepth && depth != 0 && prevState == Cell.State.LUCKY) {
+			depth--;
+			int nextBestValue = 0;
+			int winLocation = findWinningMove(player, model);
+			if (winLocation == -1) { // no win location found for us
+				for (int col2 = 0; col2 < COLUMNS; col2++) {
+					// Can't make a move if the specified column is full
+					if (!model.getCell(col2, ROWS - 1).isAvailable()) {
+						continue;
+					}
+
+					int extraValue = getMoveValue(col2, player, model, maximize, alpha, beta, depth);
+
+					if (nextBestValue < extraValue) {
+						nextBestValue = extraValue;
+					}
+
+					if (maximize) { // if we're maximizing, do max here
+						alpha = Math.max(alpha, extraValue);
+					} else {
+						beta = Math.min(beta, -extraValue);
+					}
+
+					if (alpha >= beta || extraValue >= WINNING_VALUE) {
+						break; // alpha-beta pruning
+					}
+				}
+			}
+			value += nextBestValue;
+		}
 
 		if (depth != 0) {
 			depth--;
@@ -166,7 +199,7 @@ public class Bot {
 			}
 		}
 
-		c.setState(Cell.State.EMPTY);
+		c.setState(prevState);
 		return value;
 	}
 

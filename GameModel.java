@@ -1,4 +1,5 @@
 import java.awt.Point;
+import java.util.LinkedList;
 import java.util.Scanner;
 import java.util.Stack;
 
@@ -9,6 +10,7 @@ import java.util.Stack;
 public class GameModel {
 	private Cell[][] board; // CHANGED: from Boolean[][] to Cell[][]
 	private Stack<Point> moves;
+	private Stack<Point> prevCoins; // NEW: store prev state as well
 	private String errorMessage;
 	private boolean gameOver;
 	private boolean redWins;
@@ -18,7 +20,10 @@ public class GameModel {
 	private Bot yellowBot; // NEW: added for AI
 	private int maxColumns; // NEW: change from constant to instance variable
 	private int maxRows; // NEW: change from constant to instance variable
-	private boolean playerIsYellow; // true if the human player is yellow (switches bot color)
+	private boolean playerIsYellow; // NEW: true if the human player is yellow (switches bot color)
+	private int maxLuckyCoins; // NEW: lucky coins per player, changes based on difficulty
+	private int redLuckyCoins; // NEW: lucky coins red has left
+	private int yellowLuckyCoins; // NEW: lucky coins yellow has left
 
 	// NEW: Difficulty options
 	public enum Difficulty {
@@ -31,6 +36,7 @@ public class GameModel {
 	public GameModel() {
 		maxColumns = 7; // NEW: change from constant to instance variable
 		maxRows = 6; // NEW: change from constant to instance variable
+		maxLuckyCoins = 3;
 		redBot = null; // NEW: support bot players
 		yellowBot = null; // NEW: support bot players
 		playerIsYellow = false; // NEW: allow color selection
@@ -47,6 +53,7 @@ public class GameModel {
 		yellowWins = false;
 		currentPlayer = Cell.State.RED; // CHANGED: from redsTurn = true
 		moves = new Stack<>();
+		prevCoins = new Stack<>(); // NEW: track lucky coin locations
 		errorMessage = null;
 
 		checkBotMove(); // NEW: if red is a bot, auto move
@@ -66,21 +73,25 @@ public class GameModel {
 			yellowBot = null;
 			maxColumns = 7;
 			maxRows = 6;
+			maxLuckyCoins = 3;
 			break;
 		case BEGINNER:
 			yellowBot = new Bot(2, 20);
 			maxColumns = 7;
 			maxRows = 6;
+			maxLuckyCoins = 3;
 			break;
 		case INTERMEDIATE:
 			yellowBot = new Bot(3, 10);
 			maxColumns = 14;
 			maxRows = 12;
+			maxLuckyCoins = 7;
 			break;
 		case EXPERT:
 			yellowBot = new Bot(4, 5);
 			maxColumns = 21;
 			maxRows = 18;
+			maxLuckyCoins = 11;
 			break;
 		}
 		
@@ -155,8 +166,13 @@ public class GameModel {
 		while (row < maxRows && !board[col][row].isAvailable()) { // CHANGED: from pieces[row-1][y] != null
 			row++;
 		}
+		
+		// NEW: Add last lucky coin location to lucky coin history
+		Point luckySpot = findLuckyCoin();
+		prevCoins.push(luckySpot);
 
 		// Place the piece
+		Cell.State prevState = board[col][row].getState(); // NEW: store prev state
 		board[col][row].setState(currentPlayer); // CHANGED: from pieces[row-1][y] = redsTurn
 
 		// Add the move to the move history
@@ -167,9 +183,22 @@ public class GameModel {
 
 		// Switch players if game is not over
 		if (!gameOver) {
-			currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
-			// CHANGED: from redsTurn = !redsTurn
-
+			// NEW: if placed on a lucky coin, don't switch players
+			if (prevState != Cell.State.LUCKY) {
+				currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
+				// CHANGED: from redsTurn = !redsTurn
+				
+				// NEW: Remove the lucky coin, and then try to place a new one.
+				if (luckySpot != null) {
+					board[luckySpot.x][luckySpot.y].clear();
+				}
+				checkLuckyCoinPlace(currentPlayer);
+			} else if (currentPlayer == Cell.State.RED) {
+				redLuckyCoins--; // NEW: lower lucky coin count if it was red's turn
+			} else {
+				yellowLuckyCoins--; // NEW: lower lucky coin count if it was yellow's turn
+			}
+			
 			// NEW: Try a bot move. Note that this calls makeMove, making this recursive.
 			checkBotMove();
 		}
@@ -178,7 +207,8 @@ public class GameModel {
 	}
 
 	/**
-	 * Checks if the current player is a bot, and if they are, makes their move.
+	 * NEW: Checks if the current player is a bot, and if they are, makes their move.
+	 * @return true if the current player was a bot, and false otherwise
 	 */
 	public boolean checkBotMove() {
 		Bot bot = null;
@@ -196,6 +226,55 @@ public class GameModel {
 			return true;
 		}
 		return false;
+	}
+	
+	/**
+	 * NEW: Erases all lucky coins on the board, then checks if the specified player
+	 * has a lucky coin. If so, places one at random.
+	 * @param checkState The player to check lucky coin count for
+	 * @return true if a lucky coin was placed, and false otherwise
+	 */
+	public boolean checkLuckyCoinPlace(Cell.State checkState) {
+		int luckyCoinCount = (checkState == Cell.State.RED) ? redLuckyCoins : yellowLuckyCoins;
+		if (luckyCoinCount > 0) {
+			LinkedList<Integer> validMoves = new LinkedList<>();
+			// put all valid columns in list
+			for (int col = 0; col < maxColumns; col++) {
+				if (board[col][maxRows - 1].isAvailable()) { // CHANGED: from pieces[row-1][5] != null
+					validMoves.add(col);
+				}
+			}
+			
+			if (validMoves.size() == 0) return false; // if no valid moves exist, don't add coin
+			
+			// select column, then find top row and place
+			int col = validMoves.get((int) (Math.random() * validMoves.size()));
+			for (int row = 0; row < maxRows; row++) {
+				if (board[col][row].isAvailable()) {
+					board[col][row].setState(Cell.State.LUCKY);
+					return true;
+				}
+			}
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * NEW: Finds a lucky coin on the board, returning its location as a Point object.
+	 * @return A Point object representing the lucky coin's location, with col as the x and row as the y, or NULL if none found.
+	 */
+	public Point findLuckyCoin() {
+		for (int col = 0; col < maxColumns; col++) {
+			for (int row = 0; row < maxRows; row++) {
+				if (board[col][row].isLucky()) {
+					return new Point(col, row);
+				} else if (board[col][row].isAvailable()) {
+					break; // No piece above empty cells
+				}
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -231,20 +310,36 @@ public class GameModel {
 			errorMessage = "No moves to undo.";
 			return false;
 		}
+		
+		// NEW: remove the lucky coin
+		Point luckySpot = findLuckyCoin();
+		if (luckySpot != null) {
+			board[luckySpot.x][luckySpot.y].clear();
+		}
 
 		// Remove the last move
 		Point lastMove = moves.pop();
 		board[lastMove.x][lastMove.y].clear(); // CHANGED: from pieces[x][y] = null
+		
+		// NEW: Replace lucky coin based on history
+		Point lastLuckyCoin = prevCoins.pop();
+		if (lastLuckyCoin != null) {
+			board[lastLuckyCoin.x][lastLuckyCoin.y].setState(Cell.State.LUCKY);
+		}
 
 		// Reset game over flags if necessary
 		if (gameOver) {
 			gameOver = false;
 			redWins = false;
 			yellowWins = false;
-		} else {
+		} else if (!board[lastMove.x][lastMove.y].isLucky()) { // NEW: don't switch players if this was a lucky coin
 			// Switch back to the previous player
 			currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
 			// CHANGED: from redsTurn = !redsTurn
+		} else if (currentPlayer == Cell.State.RED) {
+			redLuckyCoins++; // NEW: raise lucky coin count if it was red's turn
+		} else {
+			yellowLuckyCoins++; // NEW: raise lucky coin count if it was yellow's turn
 		}
 
 		// NEW: If it's a bot's turn, undo automatically
@@ -281,8 +376,11 @@ public class GameModel {
 		yellowWins = false;
 		currentPlayer = Cell.State.RED; // CHANGED: from redsTurn = true
 		moves.clear();
+		prevCoins.clear(); // NEW: reset prev states
 		errorMessage = null;
-		checkBotMove(); // if red is a bot, auto move
+		redLuckyCoins = maxLuckyCoins; // NEW: reset lucky coins for both players
+		yellowLuckyCoins = maxLuckyCoins; // NEW: reset lucky coins for both players
+		checkBotMove(); // NEW: if red is a bot, auto move
 	}
 
 	/**

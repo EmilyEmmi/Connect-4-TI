@@ -312,15 +312,17 @@ public class GUIView extends JFrame implements GameView {
             }
             
             // Draw the pieces
-            // CHANGED: Updated to use Cell objects
+            // CHANGED: Updated to use Cell objects, support lucky coins
             for (int col = 0; col < model.getColumns(); col++) {
                 for (int row = 0; row < model.getRows(); row++) {
                     Cell cell = model.getCell(col, row);
-                    if (!cell.isAvailable()) {
+                    if (!cell.isEmpty()) {
                         if (cell.isRed()) {
                             g2.setColor(Color.RED);
-                        } else {
+                        } else if (cell.isYellow()) {
                             g2.setColor(Color.YELLOW);
+                        } else {
+                        	g2.setColor(Color.CYAN); // TODO: make image of four leaf clover
                         }
                         g2.fill(new Ellipse2D.Double(
                             HOLE_START_X + 2 + col * HOLE_DISTANCE,

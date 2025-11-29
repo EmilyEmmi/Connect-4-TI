@@ -6,9 +6,10 @@
 public class Cell {
     // Enum to represent the state of a cell
     public enum State {
-        EMPTY,    // Cell is available for a move
+        EMPTY,    // Cell is available for a move; no lucky coin
         RED,      // Cell is occupied by a red coin
-        YELLOW    // Cell is occupied by a yellow coin
+        YELLOW,   // Cell is occupied by a yellow coin
+        LUCKY     // Cell is a "lucky coin" that can be taken
     }
     
     private State state;
@@ -29,11 +30,11 @@ public class Cell {
     }
     
     /**
-     * Checks if the cell is available (empty).
-     * @return true if the cell is empty, false otherwise
+     * Checks if the cell is available (empty or lucky).
+     * @return true if the cell is available, false otherwise
      */
     public boolean isAvailable() {
-        return state == State.EMPTY;
+        return (state == State.EMPTY || state == State.LUCKY);
     }
     
     /**
@@ -53,8 +54,24 @@ public class Cell {
     }
     
     /**
+     * Checks if the cell is empty and does not contain a lucky coin.
+     * @return true if the cell is empty, false otherwise
+     */
+    public boolean isEmpty() {
+    	return state == State.EMPTY;
+    }
+    
+    /**
+     * Checks if the cell is occupied by a lucky coin.
+     * @return true if the cell contains a lucky coin, false otherwise
+     */
+    public boolean isLucky() {
+    	return state == State.LUCKY;
+    }
+    
+    /**
      * Gets the current state of the cell.
-     * @return the current state (EMPTY, RED, or YELLOW)
+     * @return the current state (EMPTY, RED, YELLOW, or LUCKY)
      */
     public State getState() {
         return state;
@@ -82,6 +99,8 @@ public class Cell {
                 return "R";
             case YELLOW:
                 return "Y";
+            case LUCKY:
+                return "L";
             default:
                 return ".";
         }

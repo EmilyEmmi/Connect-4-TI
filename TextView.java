@@ -102,7 +102,7 @@ public class TextView implements GameView {
 		}
 		
 		// prompt for color if we didn't pick human
-		prompt = (input != "0");
+		prompt = (!input.equals("0"));
 		while (prompt) {
 			System.out.println("Select color: ");
 			System.out.println("0 - Red");
