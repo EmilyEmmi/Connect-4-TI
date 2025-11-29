@@ -31,7 +31,105 @@ public class GUIView extends JFrame implements GameView {
      */
     public GUIView(GameModel model) {
         this.model = model;
-        setupFrame();
+        setupMainMenu();
+    }
+    
+    /**
+     * NEW: Sets up main menu for difficulty and color selection
+     */
+    public void setupMainMenu() {
+    	setTitle("CONNECT 4");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(750, 550);
+        
+        // switch to vertical layout
+        setLayout(new BoxLayout(getContentPane(), BoxLayout.PAGE_AXIS));
+        
+    	// Create three control panels: One for difficulty, one for color, and one to start
+        JPanel difficultyPanel = new JPanel();
+        JPanel colorPanel = new JPanel();
+        JPanel startPanel = new JPanel();
+        
+        // Difficulty options
+        JLabel difficultyLabel = new JLabel("Select difficulty:", SwingConstants.CENTER);
+        difficultyLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        ButtonGroup difficultyButtonGroup = new ButtonGroup();
+        
+        JRadioButton humanButton = new JRadioButton("Human");
+        humanButton.setSelected(true);
+        humanButton.addActionListener(e -> {
+            model.updateValues(GameModel.Difficulty.HUMAN);
+        });
+        difficultyPanel.add(humanButton);
+        difficultyButtonGroup.add(humanButton);
+        
+        JRadioButton beginnerButton = new JRadioButton("Beginner");
+        beginnerButton.setBackground(Color.green);
+        beginnerButton.addActionListener(e -> {
+            model.updateValues(GameModel.Difficulty.BEGINNER);
+        });
+        difficultyPanel.add(beginnerButton);
+        difficultyButtonGroup.add(beginnerButton);
+        
+        JRadioButton intermediateButton = new JRadioButton("Intermediate");
+        intermediateButton.setBackground(Color.yellow);
+        intermediateButton.addActionListener(e -> {
+            model.updateValues(GameModel.Difficulty.INTERMEDIATE);
+        });
+        difficultyPanel.add(intermediateButton);
+        difficultyButtonGroup.add(intermediateButton);
+        
+        JRadioButton expertButton = new JRadioButton("Expert");
+        expertButton.setBackground(Color.red);
+        expertButton.addActionListener(e -> {
+            model.updateValues(GameModel.Difficulty.EXPERT);
+        });
+        difficultyPanel.add(expertButton);
+        difficultyButtonGroup.add(expertButton);
+        
+        // Color options
+        JLabel colorLabel = new JLabel("Select your color:", SwingConstants.CENTER);
+        colorLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        ButtonGroup colorButtonGroup = new ButtonGroup();
+        
+        JRadioButton redButton = new JRadioButton("Red");
+        redButton.setBackground(Color.red);
+        redButton.setSelected(true);
+        redButton.addActionListener(e -> {
+            model.updateBotColor(Cell.State.YELLOW);
+        });
+        colorPanel.add(redButton);
+        colorButtonGroup.add(redButton);
+        
+        JRadioButton yellowButton = new JRadioButton("Yellow");
+        yellowButton.setBackground(Color.yellow);
+        yellowButton.addActionListener(e -> {
+            model.updateBotColor(Cell.State.RED);
+        });
+        colorPanel.add(yellowButton);
+        colorButtonGroup.add(yellowButton);
+        
+        // Start button
+        JButton startButton = new JButton("Start");
+        startButton.addActionListener(e -> {
+        	// Erase menu buttons
+        	remove(difficultyLabel);
+        	remove(difficultyPanel);
+        	remove(colorLabel);
+        	remove(colorPanel);
+        	remove(startPanel);
+        	
+        	setSize(0, 0); // force display to reload
+        	setupFrame();
+        });
+        startPanel.add(startButton);
+        
+        // Add components to frame
+        add(difficultyLabel);
+        add(difficultyPanel);
+        add(colorLabel);
+        add(colorPanel);
+        add(startPanel);
     }
     
     /**
@@ -39,13 +137,9 @@ public class GUIView extends JFrame implements GameView {
      * MODIFIED: Removed button panel, added click handling
      */
     private void setupFrame() {
-    	// NEW: half hole size if the size is large
-    	if (model.getRows() > 15) {
-    		HOLE_DIAMETER = HOLE_DIAMETER / 2;
-    		HOLE_DISTANCE = HOLE_DISTANCE / 2;
-    		HOLE_OFFSET = HOLE_OFFSET / 2;
-    	}
-    	
+    	// NEW: switch back to border layout (default)
+    	setLayout(new BorderLayout());
+        
     	// NEW: Recalculate board size for different difficulties
     	// Default should be 386, 340
     	BOARD_WIDTH = HOLE_DISTANCE * (model.getColumns() - 1) + 2 * HOLE_OFFSET + HOLE_DIAMETER;
@@ -53,11 +147,19 @@ public class GUIView extends JFrame implements GameView {
     	HOLE_START_X = BOARD_START_X + HOLE_OFFSET;
         HOLE_START_Y = BOARD_START_Y + BOARD_HEIGHT - HOLE_OFFSET - HOLE_DIAMETER;
     	
-        setTitle("CONNECT 4");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         // NEW: Scale window based on board size
         // Default should be 750, 550
         setSize(BOARD_START_X * 2 + BOARD_WIDTH, BOARD_START_Y * 2 + BOARD_HEIGHT + 60);
+        
+        // NEW: half hole size if the size is too large for our primary display
+    	Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+    	if (screenSize.getWidth() < getSize().getWidth() || screenSize.getHeight() < getSize().getHeight()) {
+    		HOLE_DIAMETER = HOLE_DIAMETER / 2;
+    		HOLE_DISTANCE = HOLE_DISTANCE / 2;
+    		HOLE_OFFSET = HOLE_OFFSET / 2;
+    		setupFrame();
+    		return ;
+    	}
         
         // Create the board panel
         boardPanel = new BoardPanel();
@@ -105,6 +207,9 @@ public class GUIView extends JFrame implements GameView {
         // Add components to frame
         add(boardPanel, BorderLayout.CENTER);
         add(controlPanel, BorderLayout.SOUTH);
+        
+        // restart game
+        model.restart();
     }
     
     /**

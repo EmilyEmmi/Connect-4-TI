@@ -18,6 +18,7 @@ public class GameModel {
 	private Bot yellowBot; // NEW: added for AI
 	private int maxColumns; // NEW: change from constant to instance variable
 	private int maxRows; // NEW: change from constant to instance variable
+	private boolean playerIsYellow; // true if the human player is yellow (switches bot color)
 
 	// NEW: Difficulty options
 	public enum Difficulty {
@@ -32,6 +33,7 @@ public class GameModel {
 		maxRows = 6; // NEW: change from constant to instance variable
 		redBot = null; // NEW: support bot players
 		yellowBot = null; // NEW: support bot players
+		playerIsYellow = false; // NEW: allow color selection
 
 		board = new Cell[maxColumns][maxRows];
 		// NEW: Initialize all cells
@@ -55,6 +57,7 @@ public class GameModel {
 	 * process
 	 * 
 	 * @param difficulty The difficulty. 0 is human, 1-3 affect the bot complexity and board size
+	 * @param playerIsYellow true if the player is yellow, false otherwise.
 	 */
 	public void updateValues(Difficulty difficulty) {
 		// adjust board size and bot complexity based on difficulty
@@ -81,6 +84,12 @@ public class GameModel {
 			break;
 		}
 		
+		// make bot red
+		if (playerIsYellow) {
+			redBot = yellowBot;
+			yellowBot = null;
+		}
+		
 		// re-initialize board
 		board = new Cell[maxColumns][maxRows];
 		for (int i = 0; i < maxColumns; i++) {
@@ -88,8 +97,27 @@ public class GameModel {
 				board[i][j] = new Cell();
 			}
 		}
-
-		restart();
+	}
+	
+	/**
+	 * NEW: Updates the color of the bot.
+	 * 
+	 * @param color The color of the bot. Only supports Cell.State.RED or Cell.State.Yellow.
+	 */
+	public void updateBotColor(Cell.State color) {
+		if (color == Cell.State.RED) {
+			playerIsYellow = true;
+			if (redBot == null) {
+				redBot = yellowBot;
+				yellowBot = null;
+			}
+		} else if (color == Cell.State.YELLOW) {
+			playerIsYellow = false;
+			if (yellowBot == null) {
+				yellowBot = redBot;
+				redBot = null;
+			}
+		}
 	}
 
 	/**

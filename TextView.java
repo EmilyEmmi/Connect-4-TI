@@ -25,6 +25,7 @@ public class TextView implements GameView {
 		running = true;
 		printWelcome();
 		printHelp();
+		model.restart(); // MODIFIED: restart game
 		updateView();
 
 		// Main game loop
@@ -95,6 +96,33 @@ public class TextView implements GameView {
 			}
 			case "3": {
 				model.updateValues(GameModel.Difficulty.EXPERT);
+				break;
+			}
+			}
+		}
+		
+		// prompt for color if we didn't pick human
+		prompt = (input != "0");
+		while (prompt) {
+			System.out.println("Select color: ");
+			System.out.println("0 - Red");
+			System.out.println("1 - Yellow");
+			System.out.print("\nInput: ");
+			
+			input = scanner.nextLine().trim().toLowerCase();
+			prompt = false;
+			switch (input) {
+			default: {
+				System.out.println("Invalid color!");
+				prompt = true;
+				break;
+			}
+			case "0": {
+				model.updateBotColor(Cell.State.YELLOW);
+				break;
+			}
+			case "1": {
+				model.updateBotColor(Cell.State.RED);
 				break;
 			}
 			}
