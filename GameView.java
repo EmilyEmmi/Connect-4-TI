@@ -1,3 +1,5 @@
+import java.io.IOException;
+
 /**
  * NEW INTERFACE - Defines the contract for different game views.
  * This allows for multiple implementations (GUI, text-based, etc.)
@@ -23,6 +25,7 @@ public interface GameView {
     
     /**
      * Initializes and displays the view.
+     * @throws IOException 
      */
-    void display();
+    void display() throws IOException;
 }

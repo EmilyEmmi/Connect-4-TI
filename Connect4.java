@@ -1,3 +1,4 @@
+import java.io.IOException;
 import java.util.Scanner;
 
 /**
@@ -7,7 +8,7 @@ import java.util.Scanner;
  * MODIFIED: Now prompts user for view selection if no command-line argument provided
  */
 public class Connect4 {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         // Create the game model
         GameModel model = new GameModel();
         

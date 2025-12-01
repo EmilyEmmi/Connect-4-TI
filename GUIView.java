@@ -1,7 +1,7 @@
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
-import java.util.Scanner;
+import java.io.IOException;
 
 import javax.swing.*;
 
@@ -9,6 +9,7 @@ import javax.swing.*;
  * REFACTORED from BoardDrawing.java and Connect4UI.java
  * GUI-based view for the Connect Four game.
  * NEW FEATURE: Click on columns to make moves instead of using buttons.
+ * FIXED: Four-leaf clover graphic for lucky coins
  */
 public class GUIView extends JFrame implements GameView {
     private GameModel model;
@@ -179,13 +180,21 @@ public class GUIView extends JFrame implements GameView {
         // NEW: Save and load buttons
         JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
-            model.save();
+            try {
+				model.save();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
             updateView();
             
         });
         JButton loadButton = new JButton("Load");
         loadButton.addActionListener(e -> {
-            model.load();
+            try {
+				model.load();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
             updateView();
         });
         
@@ -264,11 +273,13 @@ public class GUIView extends JFrame implements GameView {
         /**
          * Paints the game board and pieces.
          * MODIFIED: Updated to work with Cell objects and GameModel
+         * FIXED: Four-leaf clover for lucky coins
          */
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setFont(new Font("TimesRoman", Font.BOLD, 20));
             
             // Draw the board
@@ -312,24 +323,34 @@ public class GUIView extends JFrame implements GameView {
             }
             
             // Draw the pieces
-            // CHANGED: Updated to use Cell objects, support lucky coins
+            // CHANGED: Updated to use Cell objects, support lucky coins with clover graphic
             for (int col = 0; col < model.getColumns(); col++) {
                 for (int row = 0; row < model.getRows(); row++) {
                     Cell cell = model.getCell(col, row);
                     if (!cell.isEmpty()) {
+                        int centerX = HOLE_START_X + 2 + col * HOLE_DISTANCE + (HOLE_DIAMETER - 4) / 2;
+                        int centerY = HOLE_START_Y + 2 - row * HOLE_DISTANCE + (HOLE_DIAMETER - 4) / 2;
+                        
                         if (cell.isRed()) {
                             g2.setColor(Color.RED);
+                            g2.fill(new Ellipse2D.Double(
+                                HOLE_START_X + 2 + col * HOLE_DISTANCE,
+                                HOLE_START_Y + 2 - row * HOLE_DISTANCE,
+                                HOLE_DIAMETER - 4,
+                                HOLE_DIAMETER - 4
+                            ));
                         } else if (cell.isYellow()) {
                             g2.setColor(Color.YELLOW);
+                            g2.fill(new Ellipse2D.Double(
+                                HOLE_START_X + 2 + col * HOLE_DISTANCE,
+                                HOLE_START_Y + 2 - row * HOLE_DISTANCE,
+                                HOLE_DIAMETER - 4,
+                                HOLE_DIAMETER - 4
+                            ));
                         } else {
-                        	g2.setColor(Color.CYAN); // TODO: make image of four leaf clover
+                            // FIXED: Draw four-leaf clover for lucky coin
+                            drawFourLeafClover(g2, centerX, centerY, HOLE_DIAMETER - 8);
                         }
-                        g2.fill(new Ellipse2D.Double(
-                            HOLE_START_X + 2 + col * HOLE_DISTANCE,
-                            HOLE_START_Y + 2 - row * HOLE_DISTANCE,
-                            HOLE_DIAMETER - 4,
-                            HOLE_DIAMETER - 4
-                        ));
                     }
                 }
             }
@@ -344,6 +365,121 @@ public class GUIView extends JFrame implements GameView {
                 int hintWidth = g2.getFontMetrics().stringWidth(hint);
                 g2.drawString(hint, BOARD_START_X + (BOARD_WIDTH - hintWidth) / 2, BOARD_START_Y - 60);
             }
+        }
+        
+        /**
+         * NEW METHOD: Draws a four-leaf clover at the specified location
+         * @param g2 the graphics context
+         * @param centerX center x-coordinate
+         * @param centerY center y-coordinate
+         * @param size diameter of the clover
+         */
+        private void drawFourLeafClover(Graphics2D g2, int centerX, int centerY, int size) {
+            // Turquoise/cyan background circle
+            g2.setColor(new Color(64, 224, 208)); // Turquoise
+            g2.fill(new Ellipse2D.Double(
+                centerX - size / 2,
+                centerY - size / 2,
+                size,
+                size
+            ));
+            
+            // Draw the four-leaf clover in green
+            g2.setColor(new Color(34, 139, 34)); // Forest green
+            
+            int leafSize = size / 3;
+            int leafOffset = size / 6;
+            
+            // Top leaf (heart shape)
+            drawHeartLeaf(g2, centerX, centerY - leafOffset, leafSize, 0);
+            
+            // Right leaf (heart shape rotated 90 degrees)
+            drawHeartLeaf(g2, centerX + leafOffset, centerY, leafSize, 90);
+            
+            // Bottom leaf (heart shape rotated 180 degrees)
+            drawHeartLeaf(g2, centerX, centerY + leafOffset, leafSize, 180);
+            
+            // Left leaf (heart shape rotated 270 degrees)
+            drawHeartLeaf(g2, centerX - leafOffset, centerY, leafSize, 270);
+            
+            // Draw center circle
+            int centerSize = size / 6;
+            g2.setColor(new Color(34, 139, 34)); // Same green
+            g2.fill(new Ellipse2D.Double(
+                centerX - centerSize / 2,
+                centerY - centerSize / 2,
+                centerSize,
+                centerSize
+            ));
+            
+            // Draw stem
+            int stemWidth = size / 12;
+            int stemHeight = size / 4;
+            g2.setColor(new Color(34, 139, 34));
+            g2.fill(new Rectangle(
+                centerX - stemWidth / 2,
+                centerY + size / 6,
+                stemWidth,
+                stemHeight
+            ));
+        }
+        
+        /**
+         * NEW METHOD: Draws a heart-shaped leaf
+         * @param g2 the graphics context
+         * @param centerX center x-coordinate
+         * @param centerY center y-coordinate
+         * @param size size of the leaf
+         * @param rotation rotation angle in degrees
+         */
+        private void drawHeartLeaf(Graphics2D g2, int centerX, int centerY, int size, double rotation) {
+            // Save the current transform
+            AffineTransform oldTransform = g2.getTransform();
+            
+            // Rotate around the center point
+            g2.rotate(Math.toRadians(rotation), centerX, centerY);
+            
+            // Create heart shape using two circles and a triangle
+            int circleSize = size / 2;
+            
+            // Left circle of heart
+            Ellipse2D.Double leftCircle = new Ellipse2D.Double(
+                centerX - circleSize / 2 - circleSize / 4,
+                centerY - circleSize / 2,
+                circleSize,
+                circleSize
+            );
+            
+            // Right circle of heart
+            Ellipse2D.Double rightCircle = new Ellipse2D.Double(
+                centerX - circleSize / 2 + circleSize / 4,
+                centerY - circleSize / 2,
+                circleSize,
+                circleSize
+            );
+            
+            // Bottom triangle of heart
+            int[] xPoints = {
+                centerX - circleSize / 2,
+                centerX + circleSize / 2,
+                centerX
+            };
+            int[] yPoints = {
+                centerY,
+                centerY,
+                centerY + circleSize
+            };
+            Polygon triangle = new Polygon(xPoints, yPoints, 3);
+            
+            // Combine shapes using Area for smooth filling
+            Area heart = new Area(leftCircle);
+            heart.add(new Area(rightCircle));
+            heart.add(new Area(triangle));
+            
+            g2.fill(heart);
+            
+            // Restore the original transform
+            g2.setTransform(oldTransform);
         }
         
         /**

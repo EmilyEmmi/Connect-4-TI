@@ -1,4 +1,7 @@
 import java.awt.Point;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Scanner;
 import java.util.Stack;
@@ -24,6 +27,8 @@ public class GameModel {
 	private int maxLuckyCoins; // NEW: lucky coins per player, changes based on difficulty
 	private int redLuckyCoins; // NEW: lucky coins red has left
 	private int yellowLuckyCoins; // NEW: lucky coins yellow has left
+	private Difficulty currentDifficulty; // NEW: store current difficulty for save/load
+	private boolean processingBotMove; // FIXED: prevent recursive bot moves
 
 	// NEW: Difficulty options
 	public enum Difficulty {
@@ -40,6 +45,8 @@ public class GameModel {
 		redBot = null; // NEW: support bot players
 		yellowBot = null; // NEW: support bot players
 		playerIsYellow = false; // NEW: allow color selection
+		currentDifficulty = Difficulty.HUMAN; // NEW: track difficulty
+		processingBotMove = false; // FIXED: initialize flag
 
 		board = new Cell[maxColumns][maxRows];
 		// NEW: Initialize all cells
@@ -67,6 +74,8 @@ public class GameModel {
 	 * @param playerIsYellow true if the player is yellow, false otherwise.
 	 */
 	public void updateValues(Difficulty difficulty) {
+		currentDifficulty = difficulty; // NEW: store difficulty
+		
 		// adjust board size and bot complexity based on difficulty
 		switch (difficulty) {
 		default:
@@ -143,7 +152,7 @@ public class GameModel {
 
 		// NEW: Validate column number
 		if (column < 1 || column > maxColumns) {
-			errorMessage = "Invalid column. Please choose 1-7.";
+			errorMessage = "Invalid column. Please choose 1-" + maxColumns + ".";
 			return false;
 		}
 
@@ -199,18 +208,27 @@ public class GameModel {
 				yellowLuckyCoins--; // NEW: lower lucky coin count if it was yellow's turn
 			}
 			
-			// NEW: Try a bot move. Note that this calls makeMove, making this recursive.
-			checkBotMove();
+			// FIXED: Only trigger bot move if we're not already processing one
+			// This prevents the double-move bug
+			if (!processingBotMove) {
+				checkBotMove();
+			}
 		}
 
 		return true;
 	}
 
 	/**
-	 * NEW: Checks if the current player is a bot, and if they are, makes their move.
+	 * FIXED: Checks if the current player is a bot, and if they are, makes their move.
+	 * Now includes flag to prevent recursive bot moves
 	 * @return true if the current player was a bot, and false otherwise
 	 */
 	public boolean checkBotMove() {
+		// FIXED: Don't allow nested bot moves
+		if (processingBotMove) {
+			return false;
+		}
+		
 		Bot bot = null;
 		if (currentPlayer == Cell.State.RED) {
 			bot = redBot;
@@ -219,9 +237,16 @@ public class GameModel {
 		}
 
 		if (bot != null) {
-			int column = bot.getMove(currentPlayer, this);
-			while (!makeMove(column)) {
-				column = bot.getMove(currentPlayer, this);
+			processingBotMove = true; // FIXED: Set flag before making move
+			try {
+				int column = bot.getMove(currentPlayer, this);
+				int attempts = 0;
+				while (!makeMove(column) && attempts < 100) {
+					column = bot.getMove(currentPlayer, this);
+					attempts++;
+				}
+			} finally {
+				processingBotMove = false; // FIXED: Always clear flag
 			}
 			return true;
 		}
@@ -278,24 +303,150 @@ public class GameModel {
 	}
 
 	/**
-	 * Writes the board and various game state variables to a file
+	 * FIXED: Writes the board and various game state variables to a file
+	 * Now saves complete game state including move history and bot configuration
 	 * 
-	 * @param name the name of the file you will create
 	 * @return true if successful, false otherwise
 	 */
-	public boolean save() {
-
-		return false;
+	public boolean save() throws IOException {
+		FileWriter writer = new FileWriter("game.txt");
+		
+		// Save board dimensions and difficulty settings
+		writer.write(maxColumns + "\n");
+		writer.write(maxRows + "\n");
+		writer.write(maxLuckyCoins + "\n");
+		writer.write(currentDifficulty.toString() + "\n");
+		writer.write(playerIsYellow + "\n");
+		
+		// Save board state
+		for (int col = 0; col < maxColumns; col++) {
+			for (int row = 0; row < maxRows; row++) {
+				writer.write(board[col][row].getState().toString() + "\n");
+			}
+		}
+		
+		// Save current player
+		writer.write(currentPlayer.toString() + "\n");
+		
+		// Save lucky coin counts - FIXED: now saves as integers, not ASCII values
+		writer.write(redLuckyCoins + "\n");
+		writer.write(yellowLuckyCoins + "\n");
+		
+		// Save game state flags
+		writer.write(gameOver + "\n");
+		writer.write(redWins + "\n");
+		writer.write(yellowWins + "\n");
+		
+		// Save move history
+		writer.write(moves.size() + "\n");
+		for (Point p : moves) {
+			writer.write(p.x + "," + p.y + "\n");
+		}
+		
+		// Save previous coins history
+		writer.write(prevCoins.size() + "\n");
+		for (Point p : prevCoins) {
+			if (p == null) {
+				writer.write("null\n");
+			} else {
+				writer.write(p.x + "," + p.y + "\n");
+			}
+		}
+		
+		writer.close();
+		return true;
 	}
 
 	/**
-	 * loads game state from a named file
+	 * FIXED: Loads game state from a named file
+	 * Now properly restores all game state including move history and bot configuration
 	 * 
-	 * @param name the name of the file you will load
 	 * @return true if successful, false otherwise
 	 */
-	public boolean load() {
-		return false;
+	public boolean load() throws IOException {
+		Scanner scanner = new Scanner(new File("game.txt"));
+		
+		// Load board dimensions and difficulty settings
+		maxColumns = Integer.parseInt(scanner.nextLine().trim());
+		maxRows = Integer.parseInt(scanner.nextLine().trim());
+		maxLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
+		currentDifficulty = Difficulty.valueOf(scanner.nextLine().trim());
+		playerIsYellow = Boolean.parseBoolean(scanner.nextLine().trim());
+		
+		// Recreate bots based on difficulty
+		redBot = null;
+		yellowBot = null;
+		switch (currentDifficulty) {
+			case BEGINNER:
+				yellowBot = new Bot(2, 20);
+				break;
+			case INTERMEDIATE:
+				yellowBot = new Bot(3, 10);
+				break;
+			case EXPERT:
+				yellowBot = new Bot(4, 5);
+				break;
+			default:
+				break;
+		}
+		
+		// Swap bot to red if player is yellow
+		if (playerIsYellow && yellowBot != null) {
+			redBot = yellowBot;
+			yellowBot = null;
+		}
+		
+		// Reinitialize board with loaded dimensions
+		board = new Cell[maxColumns][maxRows];
+		for (int i = 0; i < maxColumns; i++) {
+			for (int j = 0; j < maxRows; j++) {
+				board[i][j] = new Cell();
+			}
+		}
+		
+		// Load board state
+		for (int col = 0; col < maxColumns; col++) {
+			for (int row = 0; row < maxRows; row++) {
+				String stateStr = scanner.nextLine().trim();
+				board[col][row].setState(Cell.State.valueOf(stateStr));
+			}
+		}
+		
+		// Load current player - FIXED: use .equals() instead of compareTo
+		currentPlayer = Cell.State.valueOf(scanner.nextLine().trim());
+		
+		// Load lucky coin counts - FIXED: parse as integers, not ASCII values
+		redLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
+		yellowLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
+		
+		// Load game state flags
+		gameOver = Boolean.parseBoolean(scanner.nextLine().trim());
+		redWins = Boolean.parseBoolean(scanner.nextLine().trim());
+		yellowWins = Boolean.parseBoolean(scanner.nextLine().trim());
+		
+		// Load move history
+		moves.clear();
+		int movesSize = Integer.parseInt(scanner.nextLine().trim());
+		for (int i = 0; i < movesSize; i++) {
+			String[] coords = scanner.nextLine().trim().split(",");
+			moves.push(new Point(Integer.parseInt(coords[0]), Integer.parseInt(coords[1])));
+		}
+		
+		// Load previous coins history
+		prevCoins.clear();
+		int prevCoinsSize = Integer.parseInt(scanner.nextLine().trim());
+		for (int i = 0; i < prevCoinsSize; i++) {
+			String line = scanner.nextLine().trim();
+			if (line.equals("null")) {
+				prevCoins.push(null);
+			} else {
+				String[] coords = line.split(",");
+				prevCoins.push(new Point(Integer.parseInt(coords[0]), Integer.parseInt(coords[1])));
+			}
+		}
+		
+		scanner.close();
+		return true;
 	}
 
 	/**
@@ -380,6 +531,7 @@ public class GameModel {
 		errorMessage = null;
 		redLuckyCoins = maxLuckyCoins; // NEW: reset lucky coins for both players
 		yellowLuckyCoins = maxLuckyCoins; // NEW: reset lucky coins for both players
+		processingBotMove = false; // FIXED: reset flag
 		checkBotMove(); // NEW: if red is a bot, auto move
 	}
 

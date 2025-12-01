@@ -1,3 +1,4 @@
+import java.io.IOException;
 import java.util.Scanner;
 
 /**
@@ -21,7 +22,7 @@ public class TextView implements GameView {
 	}
 
 	@Override
-	public void display() {
+	public void display() throws IOException {
 		running = true;
 		printWelcome();
 		printHelp();
@@ -136,14 +137,21 @@ public class TextView implements GameView {
 		System.out.println("\nCommands:");
 		System.out.println("  1-"+model.getColumns()+"      : Place piece in column 1-"+model.getColumns());
 		System.out.println("  undo     : Undo last move");
+		System.out.println("  save     : Records the current board");
+		System.out.println("  load     : Resumes saved board");
 		System.out.println("  restart  : Restart game");
 		System.out.println("  help     : Show this help");
 		System.out.println("  quit     : Exit game");
 		System.out.println();
+		System.out.println("Legend:");
+		System.out.println("  R = Red coin");
+		System.out.println("  Y = Yellow coin");
+		System.out.println("  L = Lucky coin (can be claimed for extra turn)");
+		System.out.println();
 	}
 
 	/**
-	 * Prints the current game board.
+	 * FIXED: Prints the current game board with proper lucky coin display
 	 */
 	private void printBoard() {
 		String columnNumbers = "";
@@ -163,12 +171,15 @@ public class TextView implements GameView {
 			for (int col = 0; col < model.getColumns(); col++) {
 				Cell cell = model.getCell(col, row);
 				String symbol;
+				// FIXED: Added proper lucky coin display
 				if (cell.isRed()) {
 					symbol = " R ";
 				} else if (cell.isYellow()) {
 					symbol = " Y ";
+				} else if (cell.isLucky()) {
+					symbol = " L "; // Lucky coin display
 				} else {
-					symbol = "   ";
+					symbol = "   "; // Empty cell
 				}
 				System.out.print(symbol + "|");
 			}
@@ -199,8 +210,9 @@ public class TextView implements GameView {
 
 	/**
 	 * Processes user input commands.
+	 * @throws IOException 
 	 */
-	private void processCommand() {
+	private void processCommand() throws IOException {
 		System.out.print("\nEnter command: ");
 		String input = scanner.nextLine().trim().toLowerCase();
 
@@ -222,6 +234,20 @@ public class TextView implements GameView {
 		case "undo":
 			if (model.undo()) {
 				System.out.println("Move undone.");
+			}
+			updateView();
+			break;
+			
+		case "save":
+			if (model.save()) {
+				System.out.println("Game saved successfully!");
+			}
+			updateView();
+			break;
+			
+		case "load":
+			if (model.load()) {
+				System.out.println("Game loaded successfully!");
 			}
 			updateView();
 			break;
