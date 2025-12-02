@@ -202,8 +202,8 @@ public class GameModel {
 		Point luckySpot = null;
 		if (!wasLuckyCoin) {
 			luckySpot = findLuckyCoin();
+			prevCoins.push(luckySpot);
 		}
-		prevCoins.push(luckySpot);
 
 		// Place the piece (this replaces the lucky coin if there was one)
 		board[col][row].setState(currentPlayer);
@@ -238,6 +238,7 @@ public class GameModel {
 				// Lucky coin was claimed - player gets another turn
 				String playerColor = (currentPlayer == Cell.State.RED) ? "Red" : "Yellow";
 				setStatusMessage(playerColor + " claimed the Lucky Coin!");
+				prevCoins.push(new Point(col, row)); // add lucky coin to history
 				// Don't switch players - current player goes again
 			} else {
 				// Normal move - switch players
@@ -622,26 +623,31 @@ public class GameModel {
 			return false;
 		}
 		
-		// Remove the lucky coin
+		// Remove the current lucky coin
 		Point luckySpot = findLuckyCoin();
 		if (luckySpot != null) {
 			board[luckySpot.x][luckySpot.y].clear();
 			remainingLuckyCoins++;
+			// set lucky coin to spawn next move
+			nextLuckyCoinMove = moveCounter;
 		}
-
-		// Remove the last move
-		Point lastMove = moves.pop();
-		Cell.State lastMoveState = board[lastMove.x][lastMove.y].getState();
-		board[lastMove.x][lastMove.y].clear();
-		
-		// NEW: Decrement move counter
-		moveCounter--;
 		
 		// Replace lucky coin based on history
 		Point lastLuckyCoin = prevCoins.pop();
 		if (lastLuckyCoin != null) {
 			board[lastLuckyCoin.x][lastLuckyCoin.y].setState(Cell.State.LUCKY);
 		}
+
+		// Remove the last move
+		Point lastMove = moves.pop();
+		Cell.State lastMoveState = board[lastMove.x][lastMove.y].getState();
+		// Don't remove if this was a lucky coin
+		if (lastMoveState != Cell.State.LUCKY) {
+			board[lastMove.x][lastMove.y].clear();
+		}
+		
+		// NEW: Decrement move counter
+		moveCounter--;
 
 		// Reset game over flags if necessary
 		if (gameOver) {
