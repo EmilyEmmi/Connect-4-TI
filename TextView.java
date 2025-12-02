@@ -4,6 +4,8 @@ import java.util.Scanner;
 /**
  * NEW CLASS - Text-based console view for the Connect Four game. Allows users
  * to play the game using text commands.
+ * NEW: Scoreboard display for Human difficulty
+ * NEW: Status message display for save/load/lucky coin claims
  */
 public class TextView implements GameView {
 	private GameModel model;
@@ -26,7 +28,7 @@ public class TextView implements GameView {
 		running = true;
 		printWelcome();
 		printHelp();
-		model.restart(); // MODIFIED: restart game
+		model.restart();
 		updateView();
 
 		// Main game loop
@@ -40,8 +42,20 @@ public class TextView implements GameView {
 	@Override
 	public void updateView() {
 		System.out.println();
+		
+		// NEW: Display scoreboard if in Human difficulty
+		if (model.getDifficulty() == GameModel.Difficulty.HUMAN) {
+			printScoreboard();
+		}
+		
 		printBoard();
 		printGameState();
+		
+		// NEW: Display status message if present
+		String statusMsg = model.getStatusMessage();
+		if (statusMsg != null) {
+			System.out.println("\n>>> " + statusMsg + " <<<");
+		}
 	}
 
 	@Override
@@ -149,6 +163,15 @@ public class TextView implements GameView {
 		System.out.println("  L = Lucky coin (can be claimed for extra turn)");
 		System.out.println();
 	}
+	
+	/**
+	 * NEW METHOD: Prints the scoreboard for Human difficulty
+	 */
+	private void printScoreboard() {
+		System.out.println("\n" + "=".repeat(40));
+		System.out.println("SCOREBOARD - Red: " + model.getRedScore() + " | Yellow: " + model.getYellowScore());
+		System.out.println("=".repeat(40));
+	}
 
 	/**
 	 * FIXED: Prints the current game board with proper lucky coin display
@@ -240,14 +263,14 @@ public class TextView implements GameView {
 			
 		case "save":
 			if (model.save()) {
-				System.out.println("Game saved successfully!");
+				// Status message is set in model.save()
 			}
 			updateView();
 			break;
 			
 		case "load":
 			if (model.load()) {
-				System.out.println("Game loaded successfully!");
+				// Status message is set in model.load()
 			}
 			updateView();
 			break;

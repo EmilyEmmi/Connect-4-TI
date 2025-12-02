@@ -10,6 +10,8 @@ import javax.swing.*;
  * GUI-based view for the Connect Four game.
  * NEW FEATURE: Click on columns to make moves instead of using buttons.
  * FIXED: Four-leaf clover graphic for lucky coins
+ * NEW: Scoreboard display for Human difficulty
+ * NEW: Temporary status messages for save/load/lucky coin claims
  */
 public class GUIView extends JFrame implements GameView {
     private GameModel model;
@@ -25,6 +27,9 @@ public class GUIView extends JFrame implements GameView {
     private static int HOLE_OFFSET = 25;
     private static int HOLE_START_X = BOARD_START_X + HOLE_OFFSET;
     private static int HOLE_START_Y = BOARD_START_Y + BOARD_HEIGHT - HOLE_OFFSET - HOLE_DIAMETER;
+    
+    // NEW: Timer for refreshing status messages
+    private Timer refreshTimer;
     
     /**
      * Creates a new GUI view for the game.
@@ -122,7 +127,7 @@ public class GUIView extends JFrame implements GameView {
         	remove(startPanel);
         	
         	setSize(0, 0); // force display to reload
-        	setupFrame();
+        	setupFrame(true); // Pass true to restart the game
         });
         startPanel.add(startButton);
         
@@ -137,8 +142,9 @@ public class GUIView extends JFrame implements GameView {
     /**
      * Sets up the main frame and components.
      * MODIFIED: Removed button panel, added click handling
+     * @param shouldRestart whether to restart the game after setup (false when loading)
      */
-    private void setupFrame() {
+    private void setupFrame(boolean shouldRestart) {
     	// NEW: switch back to border layout (default)
     	setLayout(new BorderLayout());
         
@@ -159,7 +165,7 @@ public class GUIView extends JFrame implements GameView {
     		HOLE_DIAMETER = HOLE_DIAMETER / 2;
     		HOLE_DISTANCE = HOLE_DISTANCE / 2;
     		HOLE_OFFSET = HOLE_OFFSET / 2;
-    		setupFrame();
+    		setupFrame(shouldRestart);
     		return ;
     	}
         
@@ -177,24 +183,20 @@ public class GUIView extends JFrame implements GameView {
         // Create control panel with only Undo and Restart buttons
         JPanel controlPanel = new JPanel();
         
-        // NEW: Save and load buttons
+        // FIXED: Save and load buttons - removed IOException handling
         JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
-            try {
-				model.save();
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
+            model.save(); // No longer throws IOException
             updateView();
-            
         });
+        
         JButton loadButton = new JButton("Load");
         loadButton.addActionListener(e -> {
-            try {
-				model.load();
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
+            boolean loaded = model.load(); // No longer throws IOException
+            if (loaded) {
+                // NEW: Rebuild frame to match loaded game dimensions
+                rebuildFrame();
+            }
             updateView();
         });
         
@@ -218,8 +220,43 @@ public class GUIView extends JFrame implements GameView {
         add(boardPanel, BorderLayout.CENTER);
         add(controlPanel, BorderLayout.SOUTH);
         
-        // restart game
-        model.restart();
+        // NEW: Start timer for refreshing status messages
+        refreshTimer = new Timer(100, e -> {
+            if (model.getStatusMessage() != null) {
+                boardPanel.repaint();
+            }
+        });
+        refreshTimer.start();
+        
+        // Only restart game if requested (not when loading)
+        if (shouldRestart) {
+            model.restart();
+        }
+    }
+    
+    /**
+     * NEW: Rebuilds the frame to match loaded game dimensions
+     */
+    private void rebuildFrame() {
+    	// Stop the refresh timer
+    	if (refreshTimer != null) {
+    		refreshTimer.stop();
+    	}
+    	
+    	// Clear the frame
+    	getContentPane().removeAll();
+    	
+    	// Reset hole dimensions to default
+    	HOLE_DIAMETER = 36;
+    	HOLE_DISTANCE = 50;
+    	HOLE_OFFSET = 25;
+    	
+    	// Rebuild the frame WITHOUT restarting the game
+    	setupFrame(false); // Pass false to preserve loaded game state
+    	
+    	// Force repaint
+    	revalidate();
+    	repaint();
     }
     
     /**
@@ -274,6 +311,8 @@ public class GUIView extends JFrame implements GameView {
          * Paints the game board and pieces.
          * MODIFIED: Updated to work with Cell objects and GameModel
          * FIXED: Four-leaf clover for lucky coins
+         * NEW: Scoreboard display for Human difficulty
+         * NEW: Status message display
          */
         @Override
         protected void paintComponent(Graphics g) {
@@ -281,6 +320,11 @@ public class GUIView extends JFrame implements GameView {
             Graphics2D g2 = (Graphics2D) g;
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setFont(new Font("TimesRoman", Font.BOLD, 20));
+            
+            // NEW: Draw scoreboard if in Human difficulty
+            if (model.getDifficulty() == GameModel.Difficulty.HUMAN) {
+                drawScoreboard(g2);
+            }
             
             // Draw the board
             g2.setColor(Color.BLUE);
@@ -314,6 +358,34 @@ public class GUIView extends JFrame implements GameView {
             
             // Draw game state message
             drawStateMessage(g2);
+            
+            // NEW: Draw status message if present
+            String statusMsg = model.getStatusMessage();
+            if (statusMsg != null) {
+                g2.setColor(new Color(34, 139, 34)); // Green background
+                g2.fillRect(10, 280, 160, 60);
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("Arial", Font.BOLD, 14));
+                
+                // Word wrap the message
+                String[] words = statusMsg.split(" ");
+                StringBuilder line = new StringBuilder();
+                int y = 300;
+                for (String word : words) {
+                    if (g2.getFontMetrics().stringWidth(line + word) > 150) {
+                        g2.drawString(line.toString(), 15, y);
+                        y += 20;
+                        line = new StringBuilder(word + " ");
+                    } else {
+                        line.append(word).append(" ");
+                    }
+                }
+                if (line.length() > 0) {
+                    g2.drawString(line.toString(), 15, y);
+                }
+                
+                g2.setFont(new Font("TimesRoman", Font.BOLD, 20)); // Reset font
+            }
             
             // Draw error message if present
             if (model.getErrorMessage() != null) {
@@ -365,6 +437,28 @@ public class GUIView extends JFrame implements GameView {
                 int hintWidth = g2.getFontMetrics().stringWidth(hint);
                 g2.drawString(hint, BOARD_START_X + (BOARD_WIDTH - hintWidth) / 2, BOARD_START_Y - 60);
             }
+        }
+        
+        /**
+         * NEW METHOD: Draws the scoreboard for Human difficulty
+         * @param g2 the graphics context
+         */
+        private void drawScoreboard(Graphics2D g2) {
+            // Red score (top left)
+            g2.setColor(Color.RED);
+            g2.fillRect(10, 10, 100, 50);
+            g2.setColor(Color.WHITE);
+            g2.setFont(new Font("Arial", Font.BOLD, 16));
+            g2.drawString("Red: " + model.getRedScore(), 20, 40);
+            
+            // Yellow score (top right)
+            int windowWidth = getWidth();
+            g2.setColor(Color.YELLOW);
+            g2.fillRect(windowWidth - 110, 10, 100, 50);
+            g2.setColor(Color.BLACK);
+            g2.drawString("Yellow: " + model.getYellowScore(), windowWidth - 100, 40);
+            
+            g2.setFont(new Font("TimesRoman", Font.BOLD, 20)); // Reset font
         }
         
         /**

@@ -11,26 +11,38 @@ import java.util.Stack;
  * Manages the Connect Four game state, rules, and move validation.
  */
 public class GameModel {
-	private Cell[][] board; // CHANGED: from Boolean[][] to Cell[][]
+	private Cell[][] board;
 	private Stack<Point> moves;
-	private Stack<Point> prevCoins; // NEW: store prev state as well
+	private Stack<Point> prevCoins;
 	private String errorMessage;
 	private boolean gameOver;
 	private boolean redWins;
 	private boolean yellowWins;
-	private Cell.State currentPlayer; // CHANGED: from boolean redsTurn to Cell.State
-	private Bot redBot; // NEW: added for AI
-	private Bot yellowBot; // NEW: added for AI
-	private int maxColumns; // NEW: change from constant to instance variable
-	private int maxRows; // NEW: change from constant to instance variable
-	private boolean playerIsYellow; // NEW: true if the human player is yellow (switches bot color)
-	private int maxLuckyCoins; // NEW: lucky coins per player, changes based on difficulty
-	private int redLuckyCoins; // NEW: lucky coins red has left
-	private int yellowLuckyCoins; // NEW: lucky coins yellow has left
-	private Difficulty currentDifficulty; // NEW: store current difficulty for save/load
-	private boolean processingBotMove; // FIXED: prevent recursive bot moves
+	private Cell.State currentPlayer;
+	private Bot redBot;
+	private Bot yellowBot;
+	private int maxColumns;
+	private int maxRows;
+	private boolean playerIsYellow;
+	private int maxLuckyCoins;
+	private int redLuckyCoins;
+	private int yellowLuckyCoins;
+	private Difficulty currentDifficulty;
+	private boolean processingBotMove;
+	
+	// NEW: Lucky coin spawning randomly around every 3 moves
+	private int moveCounter;
+	private int nextLuckyCoinMove;
+	
+	// NEW: Scoreboard for Human difficulty
+	private int redScore;
+	private int yellowScore;
+	
+	// NEW: Status message for temporary display
+	private String statusMessage;
+	private long statusMessageTime;
+	private static final long STATUS_MESSAGE_DURATION = 3000; // 3 seconds
 
-	// NEW: Difficulty options
 	public enum Difficulty {
 		HUMAN, BEGINNER, INTERMEDIATE, EXPERT,
 	}
@@ -39,17 +51,28 @@ public class GameModel {
 	 * Creates a new game model with an empty board. Red player starts first.
 	 */
 	public GameModel() {
-		maxColumns = 7; // NEW: change from constant to instance variable
-		maxRows = 6; // NEW: change from constant to instance variable
+		maxColumns = 7;
+		maxRows = 6;
 		maxLuckyCoins = 3;
-		redBot = null; // NEW: support bot players
-		yellowBot = null; // NEW: support bot players
-		playerIsYellow = false; // NEW: allow color selection
-		currentDifficulty = Difficulty.HUMAN; // NEW: track difficulty
-		processingBotMove = false; // FIXED: initialize flag
+		redBot = null;
+		yellowBot = null;
+		playerIsYellow = false;
+		currentDifficulty = Difficulty.HUMAN;
+		processingBotMove = false;
+		
+		// NEW: Initialize lucky coin counter with randomness
+		moveCounter = 0;
+		nextLuckyCoinMove = 2 + (int)(Math.random() * 3); // Random between 2-4
+		
+		// NEW: Initialize scoreboard
+		redScore = 0;
+		yellowScore = 0;
+		
+		// NEW: Initialize status message
+		statusMessage = null;
+		statusMessageTime = 0;
 
 		board = new Cell[maxColumns][maxRows];
-		// NEW: Initialize all cells
 		for (int i = 0; i < maxColumns; i++) {
 			for (int j = 0; j < maxRows; j++) {
 				board[i][j] = new Cell();
@@ -58,12 +81,12 @@ public class GameModel {
 		gameOver = false;
 		redWins = false;
 		yellowWins = false;
-		currentPlayer = Cell.State.RED; // CHANGED: from redsTurn = true
+		currentPlayer = Cell.State.RED;
 		moves = new Stack<>();
-		prevCoins = new Stack<>(); // NEW: track lucky coin locations
+		prevCoins = new Stack<>();
 		errorMessage = null;
 
-		checkBotMove(); // NEW: if red is a bot, auto move
+		checkBotMove();
 	}
 
 	/**
@@ -71,10 +94,9 @@ public class GameModel {
 	 * process
 	 * 
 	 * @param difficulty The difficulty. 0 is human, 1-3 affect the bot complexity and board size
-	 * @param playerIsYellow true if the player is yellow, false otherwise.
 	 */
 	public void updateValues(Difficulty difficulty) {
-		currentDifficulty = difficulty; // NEW: store difficulty
+		currentDifficulty = difficulty;
 		
 		// adjust board size and bot complexity based on difficulty
 		switch (difficulty) {
@@ -141,8 +163,7 @@ public class GameModel {
 	}
 
 	/**
-	 * Attempts to place a coin in the specified column. MODIFIED: Enhanced
-	 * validation and error handling
+	 * Attempts to place a coin in the specified column.
 	 * 
 	 * @param column the column number (1-7)
 	 * @return true if the move was successful, false otherwise
@@ -150,68 +171,93 @@ public class GameModel {
 	public boolean makeMove(int column) {
 		errorMessage = null;
 
-		// NEW: Validate column number
 		if (column < 1 || column > maxColumns) {
 			errorMessage = "Invalid column. Please choose 1-" + maxColumns + ".";
 			return false;
 		}
 
-		// Can't make a move if the game is over
 		if (gameOver) {
 			errorMessage = "The game is over.";
 			return false;
 		}
 
-		int col = column - 1; // Convert to 0-indexed
+		int col = column - 1;
 
-		// Can't make a move if the specified column is full
-		if (!board[col][maxRows - 1].isAvailable()) { // CHANGED: from pieces[row-1][5] != null
+		if (!board[col][maxRows - 1].isAvailable()) {
 			errorMessage = "That column is full.";
 			return false;
 		}
 
 		// Find the next open space in the specified column
 		int row = 0;
-		while (row < maxRows && !board[col][row].isAvailable()) { // CHANGED: from pieces[row-1][y] != null
+		while (row < maxRows && !board[col][row].isAvailable()) {
 			row++;
 		}
 		
-		// NEW: Add last lucky coin location to lucky coin history
-		Point luckySpot = findLuckyCoin();
+		// NEW: Check if this cell is a lucky coin BEFORE we find other lucky coins
+		Cell.State prevState = board[col][row].getState();
+		boolean wasLuckyCoin = (prevState == Cell.State.LUCKY);
+		
+		// Find any OTHER lucky coin on the board (not the one we're about to claim)
+		Point luckySpot = null;
+		if (!wasLuckyCoin) {
+			luckySpot = findLuckyCoin();
+		}
 		prevCoins.push(luckySpot);
 
-		// Place the piece
-		Cell.State prevState = board[col][row].getState(); // NEW: store prev state
-		board[col][row].setState(currentPlayer); // CHANGED: from pieces[row-1][y] = redsTurn
+		// Place the piece (this replaces the lucky coin if there was one)
+		board[col][row].setState(currentPlayer);
 
 		// Add the move to the move history
 		moves.push(new Point(col, row));
+		
+		// NEW: Increment move counter
+		moveCounter++;
 
 		// Check if this move won the game
 		checkForWin();
 
 		// Switch players if game is not over
 		if (!gameOver) {
-			// NEW: if placed on a lucky coin, don't switch players
-			if (prevState != Cell.State.LUCKY) {
-				currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
-				// CHANGED: from redsTurn = !redsTurn
-				
-				// NEW: Remove the lucky coin, and then try to place a new one.
-				if (luckySpot != null) {
-					board[luckySpot.x][luckySpot.y].clear();
-				}
-				checkLuckyCoinPlace(currentPlayer);
-			} else if (currentPlayer == Cell.State.RED) {
-				redLuckyCoins--; // NEW: lower lucky coin count if it was red's turn
-			} else {
-				yellowLuckyCoins--; // NEW: lower lucky coin count if it was yellow's turn
+			// Remove the old lucky coin if it exists
+			if (luckySpot != null) {
+				board[luckySpot.x][luckySpot.y].clear();
 			}
 			
-			// FIXED: Only trigger bot move if we're not already processing one
-			// This prevents the double-move bug
+			// NEW: Check if we should spawn a lucky coin (randomly around every 3 moves)
+			if (moveCounter >= nextLuckyCoinMove) {
+				checkLuckyCoinPlace(currentPlayer); // Parameter doesn't matter
+				nextLuckyCoinMove = moveCounter + 2 + (int)(Math.random() * 3); // Next in 2-4 moves
+			}
+			
+			if (wasLuckyCoin) {
+				// Lucky coin was claimed - player gets another turn
+				String playerColor = (currentPlayer == Cell.State.RED) ? "Red" : "Yellow";
+				setStatusMessage(playerColor + " claimed the Lucky Coin!");
+				
+				if (currentPlayer == Cell.State.RED) {
+					redLuckyCoins--;
+				} else {
+					yellowLuckyCoins--;
+				}
+				// Don't switch players - current player goes again
+			} else {
+				// Normal move - switch players
+				currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
+			}
+			
+			// Check if the current player is a bot and should make a move
 			if (!processingBotMove) {
 				checkBotMove();
+			}
+		} else {
+			// NEW: Update scoreboard when game ends in Human difficulty
+			if (currentDifficulty == Difficulty.HUMAN) {
+				if (redWins) {
+					redScore++;
+				} else if (yellowWins) {
+					yellowScore++;
+				}
 			}
 		}
 
@@ -219,13 +265,12 @@ public class GameModel {
 	}
 
 	/**
-	 * FIXED: Checks if the current player is a bot, and if they are, makes their move.
-	 * Now includes flag to prevent recursive bot moves
+	 * Checks if the current player is a bot, and if they are, makes their move.
 	 * @return true if the current player was a bot, and false otherwise
 	 */
 	public boolean checkBotMove() {
-		// FIXED: Don't allow nested bot moves
-		if (processingBotMove) {
+		// Don't allow nested bot moves
+		if (processingBotMove || gameOver) {
 			return false;
 		}
 		
@@ -237,7 +282,7 @@ public class GameModel {
 		}
 
 		if (bot != null) {
-			processingBotMove = true; // FIXED: Set flag before making move
+			processingBotMove = true;
 			try {
 				int column = bot.getMove(currentPlayer, this);
 				int attempts = 0;
@@ -246,39 +291,47 @@ public class GameModel {
 					attempts++;
 				}
 			} finally {
-				processingBotMove = false; // FIXED: Always clear flag
+				processingBotMove = false;
 			}
+			
+			// IMPORTANT: After bot finishes its move, check if it claimed a lucky coin
+			// If it did, the currentPlayer is still the bot, so we need to make another bot move
+			if (bot != null && currentPlayer == Cell.State.RED && redBot == bot) {
+				// Bot is still red, call again for extra turn
+				return checkBotMove();
+			} else if (bot != null && currentPlayer == Cell.State.YELLOW && yellowBot == bot) {
+				// Bot is still yellow, call again for extra turn
+				return checkBotMove();
+			}
+			
 			return true;
 		}
 		return false;
 	}
 	
 	/**
-	 * NEW: Erases all lucky coins on the board, then checks if the specified player
-	 * has a lucky coin. If so, places one at random.
-	 * @param checkState The player to check lucky coin count for
+	 * NEW: Erases all lucky coins on the board, then places one at random in a valid column.
+	 * NOTE: Modified to not check player-specific lucky coin count
+	 * @param checkState The player to check lucky coin count for (not used anymore)
 	 * @return true if a lucky coin was placed, and false otherwise
 	 */
 	public boolean checkLuckyCoinPlace(Cell.State checkState) {
-		int luckyCoinCount = (checkState == Cell.State.RED) ? redLuckyCoins : yellowLuckyCoins;
-		if (luckyCoinCount > 0) {
-			LinkedList<Integer> validMoves = new LinkedList<>();
-			// put all valid columns in list
-			for (int col = 0; col < maxColumns; col++) {
-				if (board[col][maxRows - 1].isAvailable()) { // CHANGED: from pieces[row-1][5] != null
-					validMoves.add(col);
-				}
+		LinkedList<Integer> validMoves = new LinkedList<>();
+		// put all valid columns in list
+		for (int col = 0; col < maxColumns; col++) {
+			if (board[col][maxRows - 1].isAvailable()) {
+				validMoves.add(col);
 			}
-			
-			if (validMoves.size() == 0) return false; // if no valid moves exist, don't add coin
-			
-			// select column, then find top row and place
-			int col = validMoves.get((int) (Math.random() * validMoves.size()));
-			for (int row = 0; row < maxRows; row++) {
-				if (board[col][row].isAvailable()) {
-					board[col][row].setState(Cell.State.LUCKY);
-					return true;
-				}
+		}
+		
+		if (validMoves.size() == 0) return false;
+		
+		// select column, then find top row and place
+		int col = validMoves.get((int) (Math.random() * validMoves.size()));
+		for (int row = 0; row < maxRows; row++) {
+			if (board[col][row].isAvailable()) {
+				board[col][row].setState(Cell.State.LUCKY);
+				return true;
 			}
 		}
 		
@@ -295,7 +348,7 @@ public class GameModel {
 				if (board[col][row].isLucky()) {
 					return new Point(col, row);
 				} else if (board[col][row].isAvailable()) {
-					break; // No piece above empty cells
+					break;
 				}
 			}
 		}
@@ -303,154 +356,250 @@ public class GameModel {
 	}
 
 	/**
-	 * FIXED: Writes the board and various game state variables to a file
-	 * Now saves complete game state including move history and bot configuration
-	 * 
+	 * NEW: Writes the board and various game state variables to a file
 	 * @return true if successful, false otherwise
 	 */
-	public boolean save() throws IOException {
-		FileWriter writer = new FileWriter("game.txt");
-		
-		// Save board dimensions and difficulty settings
-		writer.write(maxColumns + "\n");
-		writer.write(maxRows + "\n");
-		writer.write(maxLuckyCoins + "\n");
-		writer.write(currentDifficulty.toString() + "\n");
-		writer.write(playerIsYellow + "\n");
-		
-		// Save board state
-		for (int col = 0; col < maxColumns; col++) {
-			for (int row = 0; row < maxRows; row++) {
-				writer.write(board[col][row].getState().toString() + "\n");
+	public boolean save() {
+		FileWriter writer = null;
+		try {
+			writer = new FileWriter("game.txt");
+			
+			// Save board dimensions and difficulty settings
+			writer.write(maxColumns + "\n");
+			writer.write(maxRows + "\n");
+			writer.write(maxLuckyCoins + "\n");
+			writer.write(currentDifficulty.toString() + "\n");
+			writer.write(playerIsYellow + "\n");
+			
+			// Save move counter and next lucky coin move
+			writer.write(moveCounter + "\n");
+			writer.write(nextLuckyCoinMove + "\n");
+			
+			// Save scoreboard
+			writer.write(redScore + "\n");
+			writer.write(yellowScore + "\n");
+			
+			// Save board state
+			System.out.println("Saving board state: " + maxColumns + " columns, " + maxRows + " rows");
+			int pieceCount = 0;
+			for (int col = 0; col < maxColumns; col++) {
+				for (int row = 0; row < maxRows; row++) {
+					Cell.State state = board[col][row].getState();
+					writer.write(state.toString() + "\n");
+					if (state != Cell.State.EMPTY) {
+						System.out.println("Saving piece at col=" + col + ", row=" + row + ": " + state);
+						pieceCount++;
+					}
+				}
 			}
-		}
-		
-		// Save current player
-		writer.write(currentPlayer.toString() + "\n");
-		
-		// Save lucky coin counts - FIXED: now saves as integers, not ASCII values
-		writer.write(redLuckyCoins + "\n");
-		writer.write(yellowLuckyCoins + "\n");
-		
-		// Save game state flags
-		writer.write(gameOver + "\n");
-		writer.write(redWins + "\n");
-		writer.write(yellowWins + "\n");
-		
-		// Save move history
-		writer.write(moves.size() + "\n");
-		for (Point p : moves) {
-			writer.write(p.x + "," + p.y + "\n");
-		}
-		
-		// Save previous coins history
-		writer.write(prevCoins.size() + "\n");
-		for (Point p : prevCoins) {
-			if (p == null) {
-				writer.write("null\n");
-			} else {
+			System.out.println("Saved " + pieceCount + " pieces to file");
+			
+			// Save current player
+			writer.write(currentPlayer.toString() + "\n");
+			
+			// Save lucky coin counts
+			writer.write(redLuckyCoins + "\n");
+			writer.write(yellowLuckyCoins + "\n");
+			
+			// Save game state flags
+			writer.write(gameOver + "\n");
+			writer.write(redWins + "\n");
+			writer.write(yellowWins + "\n");
+			
+			// Save move history
+			writer.write(moves.size() + "\n");
+			for (Point p : moves) {
 				writer.write(p.x + "," + p.y + "\n");
 			}
+			
+			// Save previous coins history
+			writer.write(prevCoins.size() + "\n");
+			for (Point p : prevCoins) {
+				if (p == null) {
+					writer.write("null\n");
+				} else {
+					writer.write(p.x + "," + p.y + "\n");
+				}
+			}
+			
+			// Set status message
+			setStatusMessage("Game saved successfully!");
+			System.out.println("Game saved to: " + new File("game.txt").getAbsolutePath());
+			
+			return true;
+		} catch (IOException e) {
+			setStatusMessage("Save failed!");
+			System.err.println("Failed to save game: " + e.getMessage());
+			e.printStackTrace();
+			return false;
+		} finally {
+			if (writer != null) {
+				try {
+					writer.close();
+				} catch (IOException e) {
+					System.err.println("Error closing file: " + e.getMessage());
+				}
+			}
 		}
-		
-		writer.close();
-		return true;
 	}
 
 	/**
-	 * FIXED: Loads game state from a named file
-	 * Now properly restores all game state including move history and bot configuration
-	 * 
+	 * NEW: Loads game state from a named file
 	 * @return true if successful, false otherwise
 	 */
-	public boolean load() throws IOException {
-		Scanner scanner = new Scanner(new File("game.txt"));
-		
-		// Load board dimensions and difficulty settings
-		maxColumns = Integer.parseInt(scanner.nextLine().trim());
-		maxRows = Integer.parseInt(scanner.nextLine().trim());
-		maxLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
-		currentDifficulty = Difficulty.valueOf(scanner.nextLine().trim());
-		playerIsYellow = Boolean.parseBoolean(scanner.nextLine().trim());
-		
-		// Recreate bots based on difficulty
-		redBot = null;
-		yellowBot = null;
-		switch (currentDifficulty) {
-			case BEGINNER:
-				yellowBot = new Bot(2, 20);
-				break;
-			case INTERMEDIATE:
-				yellowBot = new Bot(3, 10);
-				break;
-			case EXPERT:
-				yellowBot = new Bot(4, 5);
-				break;
-			default:
-				break;
-		}
-		
-		// Swap bot to red if player is yellow
-		if (playerIsYellow && yellowBot != null) {
-			redBot = yellowBot;
+	public boolean load() {
+		Scanner scanner = null;
+		try {
+			File file = new File("game.txt");
+			if (!file.exists()) {
+				setStatusMessage("No save file found!");
+				System.err.println("Save file not found at: " + file.getAbsolutePath());
+				return false;
+			}
+			
+			scanner = new Scanner(file);
+			
+			// Load board dimensions and difficulty settings
+			maxColumns = Integer.parseInt(scanner.nextLine().trim());
+			maxRows = Integer.parseInt(scanner.nextLine().trim());
+			maxLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
+			currentDifficulty = Difficulty.valueOf(scanner.nextLine().trim());
+			playerIsYellow = Boolean.parseBoolean(scanner.nextLine().trim());
+			
+			// Load move counter and next lucky coin move
+			moveCounter = Integer.parseInt(scanner.nextLine().trim());
+			nextLuckyCoinMove = Integer.parseInt(scanner.nextLine().trim());
+			
+			// Load scoreboard
+			redScore = Integer.parseInt(scanner.nextLine().trim());
+			yellowScore = Integer.parseInt(scanner.nextLine().trim());
+			
+			// Recreate bots based on difficulty
+			redBot = null;
 			yellowBot = null;
-		}
-		
-		// Reinitialize board with loaded dimensions
-		board = new Cell[maxColumns][maxRows];
-		for (int i = 0; i < maxColumns; i++) {
-			for (int j = 0; j < maxRows; j++) {
-				board[i][j] = new Cell();
+			switch (currentDifficulty) {
+				case BEGINNER:
+					yellowBot = new Bot(2, 20);
+					break;
+				case INTERMEDIATE:
+					yellowBot = new Bot(3, 10);
+					break;
+				case EXPERT:
+					yellowBot = new Bot(4, 5);
+					break;
+				default:
+					break;
+			}
+			
+			// Swap bot to red if player is yellow
+			if (playerIsYellow && yellowBot != null) {
+				redBot = yellowBot;
+				yellowBot = null;
+			}
+			
+			// Reinitialize board with loaded dimensions
+			board = new Cell[maxColumns][maxRows];
+			for (int i = 0; i < maxColumns; i++) {
+				for (int j = 0; j < maxRows; j++) {
+					board[i][j] = new Cell();
+				}
+			}
+			
+			// Load board state
+			System.out.println("Loading board state: " + maxColumns + " columns, " + maxRows + " rows");
+			for (int col = 0; col < maxColumns; col++) {
+				for (int row = 0; row < maxRows; row++) {
+					if (!scanner.hasNextLine()) {
+						setStatusMessage("Corrupted save file!");
+						System.err.println("Save file is corrupted or incomplete at col=" + col + ", row=" + row);
+						return false;
+					}
+					String stateStr = scanner.nextLine().trim();
+					try {
+						Cell.State state = Cell.State.valueOf(stateStr);
+						board[col][row].setState(state);
+						if (state != Cell.State.EMPTY) {
+							System.out.println("Loaded piece at col=" + col + ", row=" + row + ": " + state);
+						}
+					} catch (IllegalArgumentException e) {
+						setStatusMessage("Invalid save file!");
+						System.err.println("Invalid cell state in save file: " + stateStr);
+						return false;
+					}
+				}
+			}
+			System.out.println("Board state loaded successfully");
+			
+			// Load current player
+			if (!scanner.hasNextLine()) {
+				setStatusMessage("Corrupted save file!");
+				System.err.println("Save file missing current player");
+				return false;
+			}
+			currentPlayer = Cell.State.valueOf(scanner.nextLine().trim());
+			
+			// Load lucky coin counts
+			redLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
+			yellowLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
+			
+			// Load game state flags
+			gameOver = Boolean.parseBoolean(scanner.nextLine().trim());
+			redWins = Boolean.parseBoolean(scanner.nextLine().trim());
+			yellowWins = Boolean.parseBoolean(scanner.nextLine().trim());
+			
+			// Load move history
+			moves.clear();
+			int movesSize = Integer.parseInt(scanner.nextLine().trim());
+			for (int i = 0; i < movesSize; i++) {
+				String[] coords = scanner.nextLine().trim().split(",");
+				moves.push(new Point(Integer.parseInt(coords[0]), Integer.parseInt(coords[1])));
+			}
+			
+			// Load previous coins history
+			prevCoins.clear();
+			int prevCoinsSize = Integer.parseInt(scanner.nextLine().trim());
+			for (int i = 0; i < prevCoinsSize; i++) {
+				String line = scanner.nextLine().trim();
+				if (line.equals("null")) {
+					prevCoins.push(null);
+				} else {
+					String[] coords = line.split(",");
+					prevCoins.push(new Point(Integer.parseInt(coords[0]), Integer.parseInt(coords[1])));
+				}
+			}
+			
+			// Reset processing flag
+			processingBotMove = false;
+			
+			// Set status message
+			setStatusMessage("Game loaded successfully!");
+			System.out.println("Game loaded from: " + file.getAbsolutePath());
+			
+			// Check if bot should make a move
+			if (!gameOver) {
+				checkBotMove();
+			}
+			
+			return true;
+		} catch (IOException e) {
+			setStatusMessage("Load failed!");
+			System.err.println("Failed to load game: " + e.getMessage());
+			e.printStackTrace();
+			return false;
+		} catch (Exception e) {
+			setStatusMessage("Load error!");
+			System.err.println("Error loading game: " + e.getMessage());
+			e.printStackTrace();
+			return false;
+		} finally {
+			if (scanner != null) {
+				scanner.close();
 			}
 		}
-		
-		// Load board state
-		for (int col = 0; col < maxColumns; col++) {
-			for (int row = 0; row < maxRows; row++) {
-				String stateStr = scanner.nextLine().trim();
-				board[col][row].setState(Cell.State.valueOf(stateStr));
-			}
-		}
-		
-		// Load current player - FIXED: use .equals() instead of compareTo
-		currentPlayer = Cell.State.valueOf(scanner.nextLine().trim());
-		
-		// Load lucky coin counts - FIXED: parse as integers, not ASCII values
-		redLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
-		yellowLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
-		
-		// Load game state flags
-		gameOver = Boolean.parseBoolean(scanner.nextLine().trim());
-		redWins = Boolean.parseBoolean(scanner.nextLine().trim());
-		yellowWins = Boolean.parseBoolean(scanner.nextLine().trim());
-		
-		// Load move history
-		moves.clear();
-		int movesSize = Integer.parseInt(scanner.nextLine().trim());
-		for (int i = 0; i < movesSize; i++) {
-			String[] coords = scanner.nextLine().trim().split(",");
-			moves.push(new Point(Integer.parseInt(coords[0]), Integer.parseInt(coords[1])));
-		}
-		
-		// Load previous coins history
-		prevCoins.clear();
-		int prevCoinsSize = Integer.parseInt(scanner.nextLine().trim());
-		for (int i = 0; i < prevCoinsSize; i++) {
-			String line = scanner.nextLine().trim();
-			if (line.equals("null")) {
-				prevCoins.push(null);
-			} else {
-				String[] coords = line.split(",");
-				prevCoins.push(new Point(Integer.parseInt(coords[0]), Integer.parseInt(coords[1])));
-			}
-		}
-		
-		scanner.close();
-		return true;
 	}
 
 	/**
-	 * Undoes the last move. MODIFIED: Updated to work with Cell objects
+	 * Undoes the last move.
 	 * 
 	 * @return true if undo was successful, false otherwise
 	 */
@@ -462,7 +611,7 @@ public class GameModel {
 			return false;
 		}
 		
-		// NEW: remove the lucky coin
+		// Remove the lucky coin
 		Point luckySpot = findLuckyCoin();
 		if (luckySpot != null) {
 			board[luckySpot.x][luckySpot.y].clear();
@@ -470,9 +619,13 @@ public class GameModel {
 
 		// Remove the last move
 		Point lastMove = moves.pop();
-		board[lastMove.x][lastMove.y].clear(); // CHANGED: from pieces[x][y] = null
+		Cell.State lastMoveState = board[lastMove.x][lastMove.y].getState();
+		board[lastMove.x][lastMove.y].clear();
 		
-		// NEW: Replace lucky coin based on history
+		// NEW: Decrement move counter
+		moveCounter--;
+		
+		// Replace lucky coin based on history
 		Point lastLuckyCoin = prevCoins.pop();
 		if (lastLuckyCoin != null) {
 			board[lastLuckyCoin.x][lastLuckyCoin.y].setState(Cell.State.LUCKY);
@@ -483,17 +636,16 @@ public class GameModel {
 			gameOver = false;
 			redWins = false;
 			yellowWins = false;
-		} else if (!board[lastMove.x][lastMove.y].isLucky()) { // NEW: don't switch players if this was a lucky coin
+		} else if (lastMoveState != Cell.State.LUCKY) {
 			// Switch back to the previous player
 			currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
-			// CHANGED: from redsTurn = !redsTurn
 		} else if (currentPlayer == Cell.State.RED) {
-			redLuckyCoins++; // NEW: raise lucky coin count if it was red's turn
+			redLuckyCoins++;
 		} else {
-			yellowLuckyCoins++; // NEW: raise lucky coin count if it was yellow's turn
+			yellowLuckyCoins++;
 		}
 
-		// NEW: If it's a bot's turn, undo automatically
+		// If it's a bot's turn, undo automatically
 		Bot bot = null;
 		if (currentPlayer == Cell.State.RED) {
 			bot = redBot;
@@ -504,7 +656,7 @@ public class GameModel {
 			if (!moves.empty()) {
 				undo();
 			} else {
-				checkBotMove(); // auto move bot (when bot moved first)
+				checkBotMove();
 			}
 		}
 
@@ -512,32 +664,37 @@ public class GameModel {
 	}
 
 	/**
-	 * Resets the game to its initial state. MODIFIED: Updated to work with Cell
-	 * objects
+	 * Resets the game to its initial state.
 	 */
 	public void restart() {
 		// Clear all cells
 		for (int i = 0; i < maxColumns; i++) {
 			for (int j = 0; j < maxRows; j++) {
-				board[i][j].clear(); // CHANGED: from pieces = new Boolean[7][6]
+				board[i][j].clear();
 			}
 		}
 		gameOver = false;
 		redWins = false;
 		yellowWins = false;
-		currentPlayer = Cell.State.RED; // CHANGED: from redsTurn = true
+		currentPlayer = Cell.State.RED;
 		moves.clear();
-		prevCoins.clear(); // NEW: reset prev states
+		prevCoins.clear();
 		errorMessage = null;
-		redLuckyCoins = maxLuckyCoins; // NEW: reset lucky coins for both players
-		yellowLuckyCoins = maxLuckyCoins; // NEW: reset lucky coins for both players
-		processingBotMove = false; // FIXED: reset flag
-		checkBotMove(); // NEW: if red is a bot, auto move
+		redLuckyCoins = maxLuckyCoins;
+		yellowLuckyCoins = maxLuckyCoins;
+		processingBotMove = false;
+		
+		// NEW: Reset move counter with randomness
+		moveCounter = 0;
+		nextLuckyCoinMove = 2 + (int)(Math.random() * 3); // Random between 2-4
+		
+		// NEW: Don't reset scoreboard - it persists across restarts
+		
+		checkBotMove();
 	}
 
 	/**
-	 * Checks if the last move resulted in a win or tie. MODIFIED: Updated logic for
-	 * Cell objects
+	 * Checks if the last move resulted in a win or tie.
 	 */
 	private void checkForWin() {
 		gameOver = false;
@@ -545,14 +702,12 @@ public class GameModel {
 		yellowWins = false;
 
 		// Check for red win
-		if (fourInARow(Cell.State.RED) || fourCorners(Cell.State.RED)) { // CHANGED: from fourInARow(true), added
-																			// fourCorners()
+		if (fourInARow(Cell.State.RED) || fourCorners(Cell.State.RED)) {
 			gameOver = true;
 			redWins = true;
 		}
 		// Check for yellow win
-		else if (fourInARow(Cell.State.YELLOW) || fourCorners(Cell.State.YELLOW)) { // CHANGED: from fourInARow(false),
-																					// added fourCorners()
+		else if (fourInARow(Cell.State.YELLOW) || fourCorners(Cell.State.YELLOW)) {
 			gameOver = true;
 			yellowWins = true;
 		}
@@ -560,7 +715,7 @@ public class GameModel {
 		else {
 			boolean isTie = true;
 			for (int i = 0; i < maxColumns; i++) {
-				if (board[i][maxRows - 1].isAvailable()) { // CHANGED: from pieces[i][5] == null
+				if (board[i][maxRows - 1].isAvailable()) {
 					isTie = false;
 					break;
 				}
@@ -570,9 +725,7 @@ public class GameModel {
 	}
 
 	/**
-	 * Checks if there is a square made of a particular color. As in there are four
-	 * corners not including in-between coins or the center. These can be any size
-	 * that allows gaps, so at least 3x3.
+	 * Checks if there is a square made of a particular color.
 	 * 
 	 * @param playerState which player to check for
 	 * @return true if a square is found using the current coin, false otherwise.
@@ -581,14 +734,12 @@ public class GameModel {
 		for (int col = 0; col < maxColumns; col++) {
 			for (int row = 0; row < maxRows; row++) {
 				if (board[col][row].isAvailable()) {
-					break; // No piece above empty cells
+					break;
 				} else if (board[col][row].getState() == playerState) {
-					for (int i = 0; i < maxRows - row; i++) { // if a coin is found with your state it will loop right
-																// until finding another
+					for (int i = 0; i < maxRows - row; i++) {
 						if (board[col][row + i].getState() == playerState && i > 1 && i <= col
 								&& board[col - i][row + i].getState() == playerState
-								&& board[col - i][row].getState() == playerState) { // a series of further checks,
-																					// looking for square
+								&& board[col - i][row].getState() == playerState) {
 							return true;
 						}
 					}
@@ -599,20 +750,19 @@ public class GameModel {
 	}
 
 	/**
-	 * Checks if there are four pieces of the specified color in a row. MODIFIED:
-	 * Updated to work with Cell.State instead of boolean
+	 * Checks if there are four pieces of the specified color in a row.
 	 * 
 	 * @param playerState the player's state to check for
 	 * @return true if four in a row exists, false otherwise
 	 */
-	private boolean fourInARow(Cell.State playerState) { // CHANGED: from boolean color
+	private boolean fourInARow(Cell.State playerState) {
 		// Check vertical
 		for (int col = 0; col < maxColumns; col++) {
 			int count = 0;
 			for (int row = 0; row < maxRows; row++) {
 				if (board[col][row].isAvailable()) {
-					break; // No piece above empty cells
-				} else if (board[col][row].getState() == playerState) { // CHANGED: comparison method
+					break;
+				} else if (board[col][row].getState() == playerState) {
 					count++;
 					if (count == 4)
 						return true;
@@ -626,7 +776,7 @@ public class GameModel {
 		for (int row = 0; row < maxRows; row++) {
 			int count = 0;
 			for (int col = 0; col < maxColumns; col++) {
-				if (board[col][row].getState() == playerState) { // CHANGED: comparison method
+				if (board[col][row].getState() == playerState) {
 					count++;
 					if (count == 4)
 						return true;
@@ -670,14 +820,35 @@ public class GameModel {
 
 		return false;
 	}
+	
+	// NEW: Status message methods
+	/**
+	 * Sets a temporary status message
+	 * @param message the message to display
+	 */
+	public void setStatusMessage(String message) {
+		this.statusMessage = message;
+		this.statusMessageTime = System.currentTimeMillis();
+	}
+	
+	/**
+	 * Gets the current status message if it hasn't expired
+	 * @return the status message or null if expired
+	 */
+	public String getStatusMessage() {
+		if (statusMessage != null && System.currentTimeMillis() - statusMessageTime < STATUS_MESSAGE_DURATION) {
+			return statusMessage;
+		}
+		return null;
+	}
 
 	// Getters
 
-	public Cell[][] getBoard() { // CHANGED: from Boolean[][] getPieces()
+	public Cell[][] getBoard() {
 		return board;
 	}
 
-	public Cell getCell(int col, int row) { // NEW METHOD
+	public Cell getCell(int col, int row) {
 		if (col >= 0 && col < maxColumns && row >= 0 && row < maxRows) {
 			return board[col][row];
 		}
@@ -688,31 +859,44 @@ public class GameModel {
 		return moves;
 	}
 
-	public String getErrorMessage() { // CHANGED: from getError()
+	public String getErrorMessage() {
 		return errorMessage;
 	}
 
-	public boolean isRedWins() { // CHANGED: from getRedWins()
+	public boolean isRedWins() {
 		return redWins;
 	}
 
-	public boolean isYellowWins() { // CHANGED: from getYellowWins()
+	public boolean isYellowWins() {
 		return yellowWins;
 	}
 
-	public Cell.State getCurrentPlayer() { // NEW: replaces getRedsTurn()
+	public Cell.State getCurrentPlayer() {
 		return currentPlayer;
 	}
 
-	public boolean isGameOver() { // CHANGED: from getGameOver()
+	public boolean isGameOver() {
 		return gameOver;
 	}
 
-	public int getColumns() { // NEW METHOD
+	public int getColumns() {
 		return maxColumns;
 	}
 
-	public int getRows() { // NEW METHOD
+	public int getRows() {
 		return maxRows;
+	}
+	
+	// NEW: Getters for scoreboard
+	public int getRedScore() {
+		return redScore;
+	}
+	
+	public int getYellowScore() {
+		return yellowScore;
+	}
+	
+	public Difficulty getDifficulty() {
+		return currentDifficulty;
 	}
 }
