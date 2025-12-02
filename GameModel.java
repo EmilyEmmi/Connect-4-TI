@@ -25,8 +25,7 @@ public class GameModel {
 	private int maxRows;
 	private boolean playerIsYellow;
 	private int maxLuckyCoins;
-	private int redLuckyCoins;
-	private int yellowLuckyCoins;
+	private int remainingLuckyCoins; // NEW: Shared counter for lucky coins
 	private Difficulty currentDifficulty;
 	private boolean processingBotMove;
 	
@@ -54,6 +53,7 @@ public class GameModel {
 		maxColumns = 7;
 		maxRows = 6;
 		maxLuckyCoins = 3;
+		remainingLuckyCoins = maxLuckyCoins; // Initialize shared counter
 		redBot = null;
 		yellowBot = null;
 		playerIsYellow = false;
@@ -225,8 +225,12 @@ public class GameModel {
 			}
 			
 			// NEW: Check if we should spawn a lucky coin (randomly around every 3 moves)
-			if (moveCounter >= nextLuckyCoinMove) {
-				checkLuckyCoinPlace(currentPlayer); // Parameter doesn't matter
+			if (moveCounter >= nextLuckyCoinMove && remainingLuckyCoins > 0) {
+				boolean spawned = checkLuckyCoinPlace(currentPlayer); // Parameter doesn't matter
+				if (spawned) {
+					remainingLuckyCoins--; // Decrease counter when lucky coin spawns
+					System.out.println("Lucky coin spawned! Remaining: " + remainingLuckyCoins);
+				}
 				nextLuckyCoinMove = moveCounter + 2 + (int)(Math.random() * 3); // Next in 2-4 moves
 			}
 			
@@ -234,12 +238,6 @@ public class GameModel {
 				// Lucky coin was claimed - player gets another turn
 				String playerColor = (currentPlayer == Cell.State.RED) ? "Red" : "Yellow";
 				setStatusMessage(playerColor + " claimed the Lucky Coin!");
-				
-				if (currentPlayer == Cell.State.RED) {
-					redLuckyCoins--;
-				} else {
-					yellowLuckyCoins--;
-				}
 				// Don't switch players - current player goes again
 			} else {
 				// Normal move - switch players
@@ -311,11 +309,15 @@ public class GameModel {
 	
 	/**
 	 * NEW: Erases all lucky coins on the board, then places one at random in a valid column.
-	 * NOTE: Modified to not check player-specific lucky coin count
 	 * @param checkState The player to check lucky coin count for (not used anymore)
 	 * @return true if a lucky coin was placed, and false otherwise
 	 */
 	public boolean checkLuckyCoinPlace(Cell.State checkState) {
+		// Only spawn if we have remaining lucky coins
+		if (remainingLuckyCoins <= 0) {
+			return false;
+		}
+		
 		LinkedList<Integer> validMoves = new LinkedList<>();
 		// put all valid columns in list
 		for (int col = 0; col < maxColumns; col++) {
@@ -357,6 +359,17 @@ public class GameModel {
 
 	/**
 	 * NEW: Writes the board and various game state variables to a file
+	 * File format:
+	 * - maxColumns, maxRows, maxLuckyCoins
+	 * - currentDifficulty, playerIsYellow
+	 * - moveCounter, nextLuckyCoinMove
+	 * - remainingLuckyCoins (shared counter)
+	 * - redScore, yellowScore
+	 * - board state (col by col, row by row)
+	 * - currentPlayer
+	 * - gameOver, redWins, yellowWins
+	 * - move history
+	 * - previous coins history
 	 * @return true if successful, false otherwise
 	 */
 	public boolean save() {
@@ -374,6 +387,9 @@ public class GameModel {
 			// Save move counter and next lucky coin move
 			writer.write(moveCounter + "\n");
 			writer.write(nextLuckyCoinMove + "\n");
+			
+			// Save remaining lucky coins (shared counter)
+			writer.write(remainingLuckyCoins + "\n");
 			
 			// Save scoreboard
 			writer.write(redScore + "\n");
@@ -396,10 +412,6 @@ public class GameModel {
 			
 			// Save current player
 			writer.write(currentPlayer.toString() + "\n");
-			
-			// Save lucky coin counts
-			writer.write(redLuckyCoins + "\n");
-			writer.write(yellowLuckyCoins + "\n");
 			
 			// Save game state flags
 			writer.write(gameOver + "\n");
@@ -470,6 +482,9 @@ public class GameModel {
 			moveCounter = Integer.parseInt(scanner.nextLine().trim());
 			nextLuckyCoinMove = Integer.parseInt(scanner.nextLine().trim());
 			
+			// Load remaining lucky coins (shared counter)
+			remainingLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
+			
 			// Load scoreboard
 			redScore = Integer.parseInt(scanner.nextLine().trim());
 			yellowScore = Integer.parseInt(scanner.nextLine().trim());
@@ -537,10 +552,6 @@ public class GameModel {
 				return false;
 			}
 			currentPlayer = Cell.State.valueOf(scanner.nextLine().trim());
-			
-			// Load lucky coin counts
-			redLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
-			yellowLuckyCoins = Integer.parseInt(scanner.nextLine().trim());
 			
 			// Load game state flags
 			gameOver = Boolean.parseBoolean(scanner.nextLine().trim());
@@ -615,6 +626,7 @@ public class GameModel {
 		Point luckySpot = findLuckyCoin();
 		if (luckySpot != null) {
 			board[luckySpot.x][luckySpot.y].clear();
+			remainingLuckyCoins++;
 		}
 
 		// Remove the last move
@@ -639,11 +651,9 @@ public class GameModel {
 		} else if (lastMoveState != Cell.State.LUCKY) {
 			// Switch back to the previous player
 			currentPlayer = (currentPlayer == Cell.State.RED) ? Cell.State.YELLOW : Cell.State.RED;
-		} else if (currentPlayer == Cell.State.RED) {
-			redLuckyCoins++;
-		} else {
-			yellowLuckyCoins++;
 		}
+		// Note: If lucky coin was claimed, we don't increment remainingLuckyCoins
+		// because it already spawned and used up one from the counter
 
 		// If it's a bot's turn, undo automatically
 		Bot bot = null;
@@ -680,8 +690,7 @@ public class GameModel {
 		moves.clear();
 		prevCoins.clear();
 		errorMessage = null;
-		redLuckyCoins = maxLuckyCoins;
-		yellowLuckyCoins = maxLuckyCoins;
+		remainingLuckyCoins = maxLuckyCoins; // Reset shared counter
 		processingBotMove = false;
 		
 		// NEW: Reset move counter with randomness
