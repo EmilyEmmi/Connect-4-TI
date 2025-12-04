@@ -184,9 +184,8 @@ public class TextView implements GameView {
 				columnNumbers += " "; // more space for single digit numbers
 			}
 		}
-
-		System.out.println("\n  "+columnNumbers.trim());
-		System.out.println("+"+"---+".repeat(model.getColumns()));
+		
+		System.out.println("\n+"+"---+".repeat(model.getColumns()));
 
 		// Print from top row to bottom
 		for (int row = model.getRows() - 1; row >= 0; row--) {
@@ -209,6 +208,8 @@ public class TextView implements GameView {
 			System.out.println();
 			System.out.println("+"+"---+".repeat(model.getColumns()));
 		}
+		
+		System.out.println("  "+columnNumbers.trim()); // MODIFIED: move column numbers to bottom
 	}
 
 	/**
