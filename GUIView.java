@@ -345,16 +345,17 @@ public class GUIView extends JFrame implements GameView {
             }
             
             // Draw column numbers
-            g2.setColor(Color.BLACK);
-            for (int col = 0; col < model.getColumns(); col++) {
-                String label = String.valueOf(col + 1);
-                int w = g2.getFontMetrics().stringWidth(label);
-                g2.drawString(
-                    label,
-                    HOLE_START_X + HOLE_DIAMETER / 2 - w / 2 + col * HOLE_DISTANCE,
-                    BOARD_START_Y + BOARD_HEIGHT + 25
-                );
-            }
+            // MODIFIED: Commented out this code, since it is not necessary
+//            g2.setColor(Color.BLACK);
+//            for (int col = 0; col < model.getColumns(); col++) {
+//                String label = String.valueOf(col + 1);
+//                int w = g2.getFontMetrics().stringWidth(label);
+//                g2.drawString(
+//                    label,
+//                    HOLE_START_X + HOLE_DIAMETER / 2 - w / 2 + col * HOLE_DISTANCE,
+//                    BOARD_START_Y + BOARD_HEIGHT + 25
+//                );
+//            }
             
             // Draw game state message
             drawStateMessage(g2);

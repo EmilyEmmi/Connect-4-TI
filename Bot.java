@@ -1,6 +1,5 @@
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.Set;
 
 public class Bot {
 	private final int WINNING_VALUE = 2000;
@@ -143,8 +142,13 @@ public class Bot {
 						break; // alpha-beta pruning
 					}
 				}
+			} else {
+				c.setState(prevState);
+				return WINNING_VALUE;
 			}
 			value += nextBestValue;
+			c.setState(prevState);
+			return value;
 		}
 
 		if (depth != 0) {
